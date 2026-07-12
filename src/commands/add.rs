@@ -36,3 +36,47 @@ fn infer_task_id(url: &str) -> String {
         .unwrap_or("task")
         .to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn infer_task_id_atcoder() {
+        assert_eq!(
+            infer_task_id("https://atcoder.jp/contests/abc001/tasks/abc001_a"),
+            "abc001_a"
+        );
+    }
+
+    #[test]
+    fn infer_task_id_codeforces() {
+        assert_eq!(
+            infer_task_id("https://codeforces.com/contest/1234/problem/A"),
+            "A"
+        );
+    }
+
+    #[test]
+    fn infer_task_id_trailing_slash() {
+        assert_eq!(
+            infer_task_id("https://atcoder.jp/contests/abc001/tasks/abc001_b/"),
+            "abc001_b"
+        );
+    }
+
+    #[test]
+    fn infer_task_id_yukicoder() {
+        assert_eq!(
+            infer_task_id("https://yukicoder.me/problems/no/42"),
+            "42"
+        );
+    }
+
+    #[test]
+    fn infer_task_id_empty_string() {
+        // 空文字列を split('/') すると [""] となり、last() は "" を返す
+        // unwrap_or("task") は Some("") を受け取るため "task" にならない
+        assert_eq!(infer_task_id(""), "");
+    }
+}

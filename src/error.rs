@@ -33,3 +33,50 @@ pub enum AppError {
     #[error("Could not determine config directory")]
     ConfigDirNotFound,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unsupported_url_display() {
+        let err = AppError::UnsupportedUrl("https://example.com".to_string());
+        assert_eq!(err.to_string(), "Unsupported URL: https://example.com");
+    }
+
+    #[test]
+    fn sample_parse_display() {
+        let err = AppError::SampleParse("no samples found".to_string());
+        assert_eq!(err.to_string(), "Failed to parse samples: no samples found");
+    }
+
+    #[test]
+    fn meta_not_found_display() {
+        let err = AppError::MetaNotFound;
+        assert_eq!(
+            err.to_string(),
+            "No metadata found. Run `je new` or `je add` first."
+        );
+    }
+
+    #[test]
+    fn config_dir_not_found_display() {
+        let err = AppError::ConfigDirNotFound;
+        assert_eq!(err.to_string(), "Could not determine config directory");
+    }
+
+    #[test]
+    fn io_error_display() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let err = AppError::Io(io_err);
+        assert!(err.to_string().starts_with("IO error:"));
+    }
+
+    #[test]
+    fn json_error_display() {
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid json")
+            .unwrap_err();
+        let err = AppError::Json(json_err);
+        assert!(err.to_string().starts_with("JSON error:"));
+    }
+}

@@ -196,3 +196,126 @@ fn extract_course_id(url: &str) -> Result<String, AppError> {
         .map(|s| s.to_string())
         .ok_or_else(|| AppError::UnsupportedUrl(url.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─── URL 判定 ─────────────────────────────────────────────────
+
+    #[test]
+    fn is_url_problem() {
+        assert!(is_url(
+            "https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A"
+        ));
+    }
+
+    #[test]
+    fn is_url_course() {
+        assert!(is_url(
+            "https://onlinejudge.u-aizu.ac.jp/courses/lesson/2/ITP1/1"
+        ));
+    }
+
+    #[test]
+    fn is_url_description_jsp() {
+        assert!(is_url(
+            "https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=ITP1_1_A"
+        ));
+    }
+
+    #[test]
+    fn is_url_false_for_other() {
+        assert!(!is_url("https://atcoder.jp/contests/abc001"));
+    }
+
+    #[test]
+    fn is_contest_url_course() {
+        assert!(is_contest_url(
+            "https://onlinejudge.u-aizu.ac.jp/courses/lesson/2/ITP1/1"
+        ));
+    }
+
+    #[test]
+    fn is_contest_url_false_for_problem() {
+        assert!(!is_contest_url(
+            "https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A"
+        ));
+    }
+
+    #[test]
+    fn is_problem_url_problems_path() {
+        assert!(is_problem_url(
+            "https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A"
+        ));
+    }
+
+    #[test]
+    fn is_problem_url_description_jsp() {
+        assert!(is_problem_url(
+            "https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=ITP1_1_A"
+        ));
+    }
+
+    // ─── extract_problem_id ──────────────────────────────────────
+
+    #[test]
+    fn extract_problem_id_from_problems_path() {
+        let id = extract_problem_id(
+            "https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A",
+        )
+        .unwrap();
+        assert_eq!(id, "ITP1_1_A");
+    }
+
+    #[test]
+    fn extract_problem_id_from_description_jsp() {
+        let id = extract_problem_id(
+            "https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=ITP1_1_A",
+        )
+        .unwrap();
+        assert_eq!(id, "ITP1_1_A");
+    }
+
+    #[test]
+    fn extract_problem_id_description_jsp_with_extra_param() {
+        let id = extract_problem_id(
+            "https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=0001&lang=en",
+        )
+        .unwrap();
+        assert_eq!(id, "0001");
+    }
+
+    #[test]
+    fn extract_problem_id_unsupported() {
+        let err = extract_problem_id("https://example.com/foo").unwrap_err();
+        assert!(matches!(err, AppError::UnsupportedUrl(_)));
+    }
+
+    // ─── extract_course_id ──────────────────────────────────────
+
+    #[test]
+    fn extract_course_id_lesson_url() {
+        let id = extract_course_id(
+            "https://onlinejudge.u-aizu.ac.jp/courses/lesson/2/ITP1/1",
+        )
+        .unwrap();
+        assert_eq!(id, "ITP1");
+    }
+
+    #[test]
+    fn extract_course_id_short_path_falls_back_to_first() {
+        // /courses/{type} のように短い場合は先頭セグメントを返す
+        let id = extract_course_id(
+            "https://onlinejudge.u-aizu.ac.jp/courses/lesson",
+        )
+        .unwrap();
+        assert_eq!(id, "lesson");
+    }
+
+    #[test]
+    fn extract_course_id_unsupported() {
+        let err = extract_course_id("https://example.com/foo").unwrap_err();
+        assert!(matches!(err, AppError::UnsupportedUrl(_)));
+    }
+}

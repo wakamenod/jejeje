@@ -198,3 +198,208 @@ async fn fetch_html(url: &str, client: &reqwest::Client) -> Result<String, AppEr
     let resp = client.get(url).send().await?;
     Ok(resp.text().await?)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─── URL 判定 ─────────────────────────────────────────────────
+
+    #[test]
+    fn is_url_contest() {
+        assert!(is_url("https://atcoder.jp/contests/abc001"));
+    }
+
+    #[test]
+    fn is_url_problem() {
+        assert!(is_url(
+            "https://atcoder.jp/contests/abc001/tasks/abc001_a"
+        ));
+    }
+
+    #[test]
+    fn is_url_false_for_other_site() {
+        assert!(!is_url("https://codeforces.com/contest/1234"));
+    }
+
+    #[test]
+    fn is_contest_url_true() {
+        assert!(is_contest_url("https://atcoder.jp/contests/abc001"));
+    }
+
+    #[test]
+    fn is_contest_url_false_for_problem() {
+        assert!(!is_contest_url(
+            "https://atcoder.jp/contests/abc001/tasks/abc001_a"
+        ));
+    }
+
+    #[test]
+    fn is_problem_url_true() {
+        assert!(is_problem_url(
+            "https://atcoder.jp/contests/abc001/tasks/abc001_a"
+        ));
+    }
+
+    #[test]
+    fn is_problem_url_false_for_contest() {
+        assert!(!is_problem_url("https://atcoder.jp/contests/abc001"));
+    }
+
+    // ─── extract_contest_id ──────────────────────────────────────
+
+    #[test]
+    fn extract_contest_id_simple() {
+        let id = extract_contest_id("https://atcoder.jp/contests/abc001").unwrap();
+        assert_eq!(id, "abc001");
+    }
+
+    #[test]
+    fn extract_contest_id_trailing_slash() {
+        let id = extract_contest_id("https://atcoder.jp/contests/abc001/").unwrap();
+        assert_eq!(id, "abc001");
+    }
+
+    #[test]
+    fn extract_contest_id_from_problem_url() {
+        let id = extract_contest_id(
+            "https://atcoder.jp/contests/abc001/tasks/abc001_a",
+        )
+        .unwrap();
+        assert_eq!(id, "abc001");
+    }
+
+    #[test]
+    fn extract_contest_id_unsupported_url() {
+        let err = extract_contest_id("https://example.com/foo").unwrap_err();
+        assert!(matches!(err, AppError::UnsupportedUrl(_)));
+    }
+
+    // ─── parse_contest_name ──────────────────────────────────────
+
+    #[test]
+    fn parse_contest_name_basic() {
+        let html = "<html><head><title>AtCoder Beginner Contest 001 - AtCoder</title></head><body></body></html>";
+        let name = parse_contest_name(html).unwrap();
+        assert_eq!(name, "AtCoder Beginner Contest 001");
+    }
+
+    #[test]
+    fn parse_contest_name_no_title() {
+        let html = "<html><head></head><body></body></html>";
+        assert!(parse_contest_name(html).is_none());
+    }
+
+    #[test]
+    fn parse_contest_name_empty_title() {
+        let html = "<html><head><title></title></head></html>";
+        assert!(parse_contest_name(html).is_none());
+    }
+
+    // ─── parse_task_table ────────────────────────────────────────
+
+    #[test]
+    fn parse_task_table_basic() {
+        let html = r#"
+<table id="task-table">
+  <tbody>
+    <tr>
+      <td>A</td>
+      <td><a href="/contests/abc001/tasks/abc001_a">Two Sum</a></td>
+    </tr>
+    <tr>
+      <td>B</td>
+      <td><a href="/contests/abc001/tasks/abc001_b">Difference</a></td>
+    </tr>
+  </tbody>
+</table>
+"#;
+        let tasks = parse_task_table(html, "abc001").unwrap();
+        assert_eq!(tasks.len(), 2);
+        assert_eq!(tasks[0].id, "a");
+        assert_eq!(tasks[0].name, "Two Sum");
+        assert!(tasks[0].url.contains("abc001_a"));
+        assert_eq!(tasks[1].id, "b");
+        assert_eq!(tasks[1].name, "Difference");
+    }
+
+    #[test]
+    fn parse_task_table_absolute_href() {
+        let html = r#"
+<table id="task-table">
+  <tbody>
+    <tr>
+      <td>A</td>
+      <td><a href="https://atcoder.jp/contests/abc001/tasks/abc001_a">A problem</a></td>
+    </tr>
+  </tbody>
+</table>
+"#;
+        let tasks = parse_task_table(html, "abc001").unwrap();
+        assert_eq!(tasks[0].url, "https://atcoder.jp/contests/abc001/tasks/abc001_a");
+    }
+
+    #[test]
+    fn parse_task_table_empty_returns_error() {
+        let html = "<html><body></body></html>";
+        let err = parse_task_table(html, "abc001").unwrap_err();
+        assert!(matches!(err, AppError::SampleParse(_)));
+    }
+
+    // ─── parse_samples ───────────────────────────────────────────
+
+    #[test]
+    fn parse_samples_japanese_labels() {
+        let html = r#"
+<html><body>
+  <section>
+    <h3>入力例 1</h3>
+    <pre>3 5</pre>
+  </section>
+  <section>
+    <h3>出力例 1</h3>
+    <pre>8</pre>
+  </section>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].input.trim(), "3 5");
+        assert_eq!(samples[0].output.trim(), "8");
+    }
+
+    #[test]
+    fn parse_samples_english_labels() {
+        let html = r#"
+<html><body>
+  <section>
+    <h3>Sample Input 1</h3>
+    <pre>1 2 3</pre>
+  </section>
+  <section>
+    <h3>Sample Output 1</h3>
+    <pre>6</pre>
+  </section>
+  <section>
+    <h3>Sample Input 2</h3>
+    <pre>10 20</pre>
+  </section>
+  <section>
+    <h3>Sample Output 2</h3>
+    <pre>30</pre>
+  </section>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 2);
+        assert_eq!(samples[1].input.trim(), "10 20");
+        assert_eq!(samples[1].output.trim(), "30");
+    }
+
+    #[test]
+    fn parse_samples_no_samples_returns_error() {
+        let html = "<html><body><p>Nothing here</p></body></html>";
+        let err = parse_samples(html).unwrap_err();
+        assert!(matches!(err, AppError::SampleParse(_)));
+    }
+}

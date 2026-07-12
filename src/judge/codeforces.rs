@@ -183,3 +183,183 @@ async fn fetch_html(url: &str, client: &reqwest::Client) -> Result<String, AppEr
     let resp = client.get(url).send().await?;
     Ok(resp.text().await?)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─── URL 判定 ─────────────────────────────────────────────────
+
+    #[test]
+    fn is_url_contest() {
+        assert!(is_url("https://codeforces.com/contest/1234"));
+    }
+
+    #[test]
+    fn is_url_gym() {
+        assert!(is_url("https://codeforces.com/gym/102028"));
+    }
+
+    #[test]
+    fn is_url_false_for_other() {
+        assert!(!is_url("https://atcoder.jp/contests/abc001"));
+    }
+
+    #[test]
+    fn is_contest_url_contest() {
+        assert!(is_contest_url("https://codeforces.com/contest/1234"));
+    }
+
+    #[test]
+    fn is_contest_url_gym() {
+        assert!(is_contest_url("https://codeforces.com/gym/102028"));
+    }
+
+    #[test]
+    fn is_contest_url_false_for_problem() {
+        assert!(!is_contest_url(
+            "https://codeforces.com/contest/1234/problem/A"
+        ));
+    }
+
+    #[test]
+    fn is_problem_url_problem() {
+        assert!(is_problem_url(
+            "https://codeforces.com/contest/1234/problem/A"
+        ));
+    }
+
+    #[test]
+    fn is_problem_url_problemset() {
+        assert!(is_problem_url(
+            "https://codeforces.com/problemset/problem/1234/A"
+        ));
+    }
+
+    #[test]
+    fn is_problem_url_false_for_contest() {
+        assert!(!is_problem_url("https://codeforces.com/contest/1234"));
+    }
+
+    // ─── extract_contest_id ──────────────────────────────────────
+
+    #[test]
+    fn extract_contest_id_contest() {
+        let id = extract_contest_id("https://codeforces.com/contest/1234").unwrap();
+        assert_eq!(id, "1234");
+    }
+
+    #[test]
+    fn extract_contest_id_gym() {
+        let id = extract_contest_id("https://codeforces.com/gym/102028").unwrap();
+        assert_eq!(id, "102028");
+    }
+
+    #[test]
+    fn extract_contest_id_from_problem_url() {
+        let id =
+            extract_contest_id("https://codeforces.com/contest/1234/problem/A").unwrap();
+        assert_eq!(id, "1234");
+    }
+
+    #[test]
+    fn extract_contest_id_trailing_slash() {
+        let id = extract_contest_id("https://codeforces.com/contest/1234/").unwrap();
+        assert_eq!(id, "1234");
+    }
+
+    #[test]
+    fn extract_contest_id_unsupported() {
+        let err = extract_contest_id("https://example.com/foo").unwrap_err();
+        assert!(matches!(err, AppError::UnsupportedUrl(_)));
+    }
+
+    // ─── parse_contest_problems ──────────────────────────────────
+
+    #[test]
+    fn parse_contest_problems_basic() {
+        let html = r#"
+<html><body>
+<table class="problems">
+  <tr>
+    <td>A</td>
+    <td><a href="/contest/1234/problem/A">Hello World</a></td>
+  </tr>
+  <tr>
+    <td>B</td>
+    <td><a href="/contest/1234/problem/B">Two Sum</a></td>
+  </tr>
+</table>
+</body></html>
+"#;
+        let tasks = parse_contest_problems(html, "1234", "contest").unwrap();
+        assert_eq!(tasks.len(), 2);
+        assert_eq!(tasks[0].id, "a");
+        assert_eq!(tasks[0].name, "Hello World");
+        assert!(tasks[0].url.contains("/problem/A"));
+        assert_eq!(tasks[1].id, "b");
+    }
+
+    #[test]
+    fn parse_contest_problems_empty_returns_error() {
+        let html = "<html><body></body></html>";
+        let err = parse_contest_problems(html, "1234", "contest").unwrap_err();
+        assert!(matches!(err, AppError::SampleParse(_)));
+    }
+
+    // ─── parse_samples ───────────────────────────────────────────
+
+    #[test]
+    fn parse_samples_basic() {
+        let html = r#"
+<html><body>
+<div class="sample-test">
+  <div class="input"><pre>3 5</pre></div>
+  <div class="output"><pre>8</pre></div>
+</div>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].input.trim(), "3 5");
+        assert_eq!(samples[0].output.trim(), "8");
+    }
+
+    #[test]
+    fn parse_samples_multiple() {
+        let html = r#"
+<html><body>
+<div class="sample-test">
+  <div class="input"><pre>1</pre></div>
+  <div class="output"><pre>1</pre></div>
+  <div class="input"><pre>2</pre></div>
+  <div class="output"><pre>4</pre></div>
+</div>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 2);
+    }
+
+    #[test]
+    fn parse_samples_no_samples_returns_error() {
+        let html = "<html><body><p>No samples</p></body></html>";
+        let err = parse_samples(html).unwrap_err();
+        assert!(matches!(err, AppError::SampleParse(_)));
+    }
+
+    // ─── parse_contest_name ──────────────────────────────────────
+
+    #[test]
+    fn parse_contest_name_found() {
+        let html = r#"<html><body><div class="contest-name">Codeforces Round #750</div></body></html>"#;
+        let name = parse_contest_name(html).unwrap();
+        assert_eq!(name, "Codeforces Round #750");
+    }
+
+    #[test]
+    fn parse_contest_name_not_found() {
+        let html = "<html><body></body></html>";
+        assert!(parse_contest_name(html).is_none());
+    }
+}

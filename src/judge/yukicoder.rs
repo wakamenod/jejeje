@@ -152,3 +152,91 @@ fn extract_problem_no(url: &str) -> Result<String, AppError> {
         .map(|s| s.to_string())
         .ok_or_else(|| AppError::UnsupportedUrl(url.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─── URL 判定 ─────────────────────────────────────────────────
+
+    #[test]
+    fn is_url_contest() {
+        assert!(is_url("https://yukicoder.me/contests/400"));
+    }
+
+    #[test]
+    fn is_url_problem() {
+        assert!(is_url("https://yukicoder.me/problems/no/1"));
+    }
+
+    #[test]
+    fn is_url_false_for_other() {
+        assert!(!is_url("https://atcoder.jp/contests/abc001"));
+    }
+
+    #[test]
+    fn is_contest_url_true() {
+        assert!(is_contest_url("https://yukicoder.me/contests/400"));
+    }
+
+    #[test]
+    fn is_contest_url_false_for_problem() {
+        assert!(!is_contest_url("https://yukicoder.me/problems/no/1"));
+    }
+
+    #[test]
+    fn is_problem_url_true() {
+        assert!(is_problem_url("https://yukicoder.me/problems/no/1"));
+    }
+
+    #[test]
+    fn is_problem_url_false_for_contest() {
+        assert!(!is_problem_url("https://yukicoder.me/contests/400"));
+    }
+
+    // ─── extract_contest_id ──────────────────────────────────────
+
+    #[test]
+    fn extract_contest_id_basic() {
+        let id = extract_contest_id("https://yukicoder.me/contests/400").unwrap();
+        assert_eq!(id, "400");
+    }
+
+    #[test]
+    fn extract_contest_id_trailing_slash() {
+        let id = extract_contest_id("https://yukicoder.me/contests/400/").unwrap();
+        assert_eq!(id, "400");
+    }
+
+    #[test]
+    fn extract_contest_id_unsupported() {
+        let err = extract_contest_id("https://example.com/foo").unwrap_err();
+        assert!(matches!(err, AppError::UnsupportedUrl(_)));
+    }
+
+    // ─── extract_problem_no ──────────────────────────────────────
+
+    #[test]
+    fn extract_problem_no_basic() {
+        let no = extract_problem_no("https://yukicoder.me/problems/no/1").unwrap();
+        assert_eq!(no, "1");
+    }
+
+    #[test]
+    fn extract_problem_no_large_number() {
+        let no = extract_problem_no("https://yukicoder.me/problems/no/9999").unwrap();
+        assert_eq!(no, "9999");
+    }
+
+    #[test]
+    fn extract_problem_no_trailing_slash() {
+        let no = extract_problem_no("https://yukicoder.me/problems/no/42/").unwrap();
+        assert_eq!(no, "42");
+    }
+
+    #[test]
+    fn extract_problem_no_unsupported() {
+        let err = extract_problem_no("https://example.com/foo").unwrap_err();
+        assert!(matches!(err, AppError::UnsupportedUrl(_)));
+    }
+}

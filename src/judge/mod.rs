@@ -82,3 +82,95 @@ pub fn is_contest_url(url: &str) -> bool {
         Err(_) => false,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::AppError;
+
+    // ─── JudgeKind::from_url ───────────────────────────────────────
+
+    #[test]
+    fn from_url_atcoder_contest() {
+        let kind = JudgeKind::from_url("https://atcoder.jp/contests/abc001").unwrap();
+        assert_eq!(kind, JudgeKind::AtCoder);
+    }
+
+    #[test]
+    fn from_url_atcoder_problem() {
+        let kind = JudgeKind::from_url(
+            "https://atcoder.jp/contests/abc001/tasks/abc001_a",
+        )
+        .unwrap();
+        assert_eq!(kind, JudgeKind::AtCoder);
+    }
+
+    #[test]
+    fn from_url_codeforces_contest() {
+        let kind =
+            JudgeKind::from_url("https://codeforces.com/contest/1234").unwrap();
+        assert_eq!(kind, JudgeKind::Codeforces);
+    }
+
+    #[test]
+    fn from_url_codeforces_gym() {
+        let kind = JudgeKind::from_url("https://codeforces.com/gym/102028").unwrap();
+        assert_eq!(kind, JudgeKind::Codeforces);
+    }
+
+    #[test]
+    fn from_url_yukicoder_contest() {
+        let kind =
+            JudgeKind::from_url("https://yukicoder.me/contests/400").unwrap();
+        assert_eq!(kind, JudgeKind::Yukicoder);
+    }
+
+    #[test]
+    fn from_url_yukicoder_problem() {
+        let kind =
+            JudgeKind::from_url("https://yukicoder.me/problems/no/1").unwrap();
+        assert_eq!(kind, JudgeKind::Yukicoder);
+    }
+
+    #[test]
+    fn from_url_aoj_problem() {
+        let kind = JudgeKind::from_url(
+            "https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A",
+        )
+        .unwrap();
+        assert_eq!(kind, JudgeKind::Aoj);
+    }
+
+    #[test]
+    fn from_url_unknown_returns_error() {
+        let err = JudgeKind::from_url("https://example.com/foo").unwrap_err();
+        assert!(matches!(err, AppError::UnsupportedUrl(_)));
+    }
+
+    #[test]
+    fn as_str_values() {
+        assert_eq!(JudgeKind::AtCoder.as_str(), "atcoder");
+        assert_eq!(JudgeKind::Codeforces.as_str(), "codeforces");
+        assert_eq!(JudgeKind::Yukicoder.as_str(), "yukicoder");
+        assert_eq!(JudgeKind::Aoj.as_str(), "aoj");
+    }
+
+    // ─── is_contest_url (public) ──────────────────────────────────
+
+    #[test]
+    fn is_contest_url_atcoder_true() {
+        assert!(is_contest_url("https://atcoder.jp/contests/abc001"));
+    }
+
+    #[test]
+    fn is_contest_url_atcoder_problem_false() {
+        assert!(!is_contest_url(
+            "https://atcoder.jp/contests/abc001/tasks/abc001_a"
+        ));
+    }
+
+    #[test]
+    fn is_contest_url_unknown_false() {
+        assert!(!is_contest_url("https://example.com"));
+    }
+}

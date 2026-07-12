@@ -34,3 +34,7 @@ directories = "6"
 
 # ターミナル色付け
 owo-colors = { version = "4", features = ["supports-colors"] }
+
+[dev-dependencies]
+# 一時ディレクトリ生成（ファイルシステムテスト用）
+tempfile = "3"

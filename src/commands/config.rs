@@ -84,3 +84,138 @@ fn set_value(config: &mut Config, key: &str, value: &str) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    fn default_config() -> Config {
+        Config::default()
+    }
+
+    // ─── get_value ───────────────────────────────────────────────
+
+    #[test]
+    fn get_contest_directory() {
+        let config = default_config();
+        assert_eq!(get_value(&config, "contest_directory").unwrap(), "{contest_id}");
+    }
+
+    #[test]
+    fn get_task_directory() {
+        let config = default_config();
+        assert_eq!(get_value(&config, "task_directory").unwrap(), "{task_id}");
+    }
+
+    #[test]
+    fn get_test_directory() {
+        let config = default_config();
+        assert_eq!(get_value(&config, "test_directory").unwrap(), "test");
+    }
+
+    #[test]
+    fn get_default_template_none() {
+        let config = default_config();
+        assert_eq!(get_value(&config, "default_template").unwrap(), "(none)");
+    }
+
+    #[test]
+    fn get_default_template_some() {
+        let mut config = default_config();
+        config.default_template = Some("rust".to_string());
+        assert_eq!(get_value(&config, "default_template").unwrap(), "rust");
+    }
+
+    #[test]
+    fn get_template_dir_none() {
+        let config = default_config();
+        assert_eq!(get_value(&config, "template_dir").unwrap(), "(none)");
+    }
+
+    #[test]
+    fn get_template_dir_some() {
+        let mut config = default_config();
+        config.template_dir = Some("/path/to/templates".to_string());
+        assert_eq!(
+            get_value(&config, "template_dir").unwrap(),
+            "/path/to/templates"
+        );
+    }
+
+    #[test]
+    fn get_unknown_key_returns_error() {
+        let config = default_config();
+        assert!(get_value(&config, "unknown_key").is_err());
+    }
+
+    // ─── set_value ───────────────────────────────────────────────
+
+    #[test]
+    fn set_contest_directory() {
+        let mut config = default_config();
+        set_value(&mut config, "contest_directory", "contests/{contest_id}").unwrap();
+        assert_eq!(config.contest_directory, "contests/{contest_id}");
+    }
+
+    #[test]
+    fn set_task_directory() {
+        let mut config = default_config();
+        set_value(&mut config, "task_directory", "tasks/{task_id}").unwrap();
+        assert_eq!(config.task_directory, "tasks/{task_id}");
+    }
+
+    #[test]
+    fn set_test_directory() {
+        let mut config = default_config();
+        set_value(&mut config, "test_directory", "samples").unwrap();
+        assert_eq!(config.test_directory, "samples");
+    }
+
+    #[test]
+    fn set_default_template_to_value() {
+        let mut config = default_config();
+        set_value(&mut config, "default_template", "cpp").unwrap();
+        assert_eq!(config.default_template, Some("cpp".to_string()));
+    }
+
+    #[test]
+    fn set_default_template_to_none_keyword() {
+        let mut config = default_config();
+        config.default_template = Some("rust".to_string());
+        set_value(&mut config, "default_template", "(none)").unwrap();
+        assert!(config.default_template.is_none());
+    }
+
+    #[test]
+    fn set_default_template_to_empty_string() {
+        let mut config = default_config();
+        config.default_template = Some("rust".to_string());
+        set_value(&mut config, "default_template", "").unwrap();
+        assert!(config.default_template.is_none());
+    }
+
+    #[test]
+    fn set_template_dir_to_path() {
+        let mut config = default_config();
+        set_value(&mut config, "template_dir", "/home/user/templates").unwrap();
+        assert_eq!(
+            config.template_dir,
+            Some("/home/user/templates".to_string())
+        );
+    }
+
+    #[test]
+    fn set_template_dir_to_none_keyword() {
+        let mut config = default_config();
+        config.template_dir = Some("/some/path".to_string());
+        set_value(&mut config, "template_dir", "(none)").unwrap();
+        assert!(config.template_dir.is_none());
+    }
+
+    #[test]
+    fn set_unknown_key_returns_error() {
+        let mut config = default_config();
+        assert!(set_value(&mut config, "unknown_key", "value").is_err());
+    }
+}

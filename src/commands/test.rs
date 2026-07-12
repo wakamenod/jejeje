@@ -284,3 +284,128 @@ fn print_diff(input: &str, expected: &str, actual: &str) {
         println!("    {}", line.red());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ─── compare ─────────────────────────────────────────────────
+
+    #[test]
+    fn compare_identical() {
+        assert!(compare("hello", "hello", None));
+    }
+
+    #[test]
+    fn compare_trims_leading_trailing_whitespace() {
+        assert!(compare("  hello\n", "hello", None));
+    }
+
+    #[test]
+    fn compare_trims_both_sides() {
+        assert!(compare("  42\n", "  42  ", None));
+    }
+
+    #[test]
+    fn compare_different_strings() {
+        assert!(!compare("hello", "world", None));
+    }
+
+    #[test]
+    fn compare_case_sensitive() {
+        assert!(!compare("Hello", "hello", None));
+    }
+
+    #[test]
+    fn compare_newline_difference_after_trim() {
+        // trim() は末尾改行も除くので、改行の有無は関係ない
+        assert!(compare("42\n", "42", None));
+    }
+
+    #[test]
+    fn compare_multiline_identical() {
+        assert!(compare("1\n2\n3\n", "1\n2\n3", None));
+    }
+
+    #[test]
+    fn compare_multiline_different() {
+        assert!(!compare("1\n2\n3\n", "1\n2\n4", None));
+    }
+
+    // compare with epsilon ─────────────────────────────────────────
+
+    #[test]
+    fn compare_float_exact_match_no_epsilon_needed() {
+        assert!(compare("3.14", "3.14", Some(1e-9)));
+    }
+
+    #[test]
+    fn compare_float_within_absolute_tolerance() {
+        assert!(compare("1.0000001", "1.0", Some(1e-6)));
+    }
+
+    #[test]
+    fn compare_float_outside_tolerance() {
+        assert!(!compare("1.01", "1.0", Some(1e-9)));
+    }
+
+    #[test]
+    fn compare_float_relative_tolerance() {
+        // |1.0001 - 1.0| / |1.0| = 1e-4 <= 1e-3
+        assert!(compare("1.0001", "1.0", Some(1e-3)));
+    }
+
+    // ─── compare_float ───────────────────────────────────────────
+
+    #[test]
+    fn compare_float_single_token_pass() {
+        assert!(compare_float("3.14159", "3.14159", 1e-9));
+    }
+
+    #[test]
+    fn compare_float_single_token_within_eps() {
+        assert!(compare_float("1.000001", "1.0", 1e-5));
+    }
+
+    #[test]
+    fn compare_float_single_token_outside_eps() {
+        assert!(!compare_float("2.0", "1.0", 1e-9));
+    }
+
+    #[test]
+    fn compare_float_multiple_tokens_all_pass() {
+        assert!(compare_float("1.0 2.0 3.0", "1.0 2.0 3.0", 1e-9));
+    }
+
+    #[test]
+    fn compare_float_multiple_tokens_one_fails() {
+        assert!(!compare_float("1.0 2.0 99.0", "1.0 2.0 3.0", 1e-9));
+    }
+
+    #[test]
+    fn compare_float_token_count_mismatch() {
+        assert!(!compare_float("1.0 2.0", "1.0", 1e-9));
+    }
+
+    #[test]
+    fn compare_float_non_numeric_exact_match() {
+        // 数値でないトークンは文字列完全一致のみ
+        assert!(compare_float("YES", "YES", 1e-9));
+    }
+
+    #[test]
+    fn compare_float_non_numeric_mismatch() {
+        assert!(!compare_float("YES", "NO", 1e-9));
+    }
+
+    #[test]
+    fn compare_float_mixed_tokens() {
+        assert!(compare_float("YES 3.14", "YES 3.14", 1e-9));
+    }
+
+    #[test]
+    fn compare_float_near_zero_absolute_tolerance() {
+        // ef が 0 に近い場合は絶対誤差で判定
+        assert!(compare_float("0.0000001", "0.0", 1e-6));
+    }
+}
