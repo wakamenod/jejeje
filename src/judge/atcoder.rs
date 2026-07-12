@@ -127,6 +127,20 @@ fn parse_task_table(html: &str, contest_id: &str) -> Result<Vec<TaskMeta>, AppEr
 ///
 /// AtCoder の問題ページでは `<section>` の `<h3>` タグに
 /// "入力例" / "出力例" または "Sample Input" / "Sample Output" が含まれる。
+///
+/// # HTML 構造
+/// ```html
+/// <section>
+///   <h3>入力例 1</h3>
+///   <pre>3 5</pre>
+/// </section>
+/// <section>
+///   <h3>出力例 1</h3>
+///   <pre>8</pre>
+/// </section>
+/// ```
+///
+/// `<pre><code>...</code></pre>` のネスト構造にも対応する。
 fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
     let doc = Html::parse_document(html);
     let section_sel = Selector::parse("section").unwrap();
@@ -143,10 +157,11 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
             .map(|h| h.text().collect::<String>())
             .unwrap_or_default();
 
+        // <pre> 内に <code> がネストされていても text() はすべての子孫テキストを連結する
         let pre_text = section
             .select(&pre_sel)
             .next()
-            .map(|p| p.text().collect::<String>())
+            .map(|p| normalize_pre_text(p.text().collect::<String>()))
             .unwrap_or_default();
 
         if heading.contains("入力例") || heading.contains("Sample Input") {
@@ -162,6 +177,14 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
         ));
     }
 
+    if inputs.len() != outputs.len() {
+        return Err(AppError::SampleParse(format!(
+            "Sample input/output count mismatch: {} input(s) vs {} output(s)",
+            inputs.len(),
+            outputs.len(),
+        )));
+    }
+
     let samples = inputs
         .into_iter()
         .zip(outputs)
@@ -169,6 +192,20 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
         .collect();
 
     Ok(samples)
+}
+
+/// `<pre>` テキストの末尾改行を統一する。
+///
+/// AtCoder の `<pre>` ブロックは末尾に `\n` が付くことが多い。
+/// ここでは末尾の空白を取り除いたうえで `\n` を 1 つ付加し、
+/// 後続の比較処理で扱いやすい形に正規化する。
+fn normalize_pre_text(s: String) -> String {
+    let trimmed = s.trim_end_matches(['\n', '\r', ' ']);
+    if trimmed.is_empty() {
+        String::new()
+    } else {
+        format!("{trimmed}\n")
+    }
 }
 
 /// `<title>` タグからコンテスト名を抽出する。
@@ -401,5 +438,122 @@ mod tests {
         let html = "<html><body><p>Nothing here</p></body></html>";
         let err = parse_samples(html).unwrap_err();
         assert!(matches!(err, AppError::SampleParse(_)));
+    }
+
+    #[test]
+    fn parse_samples_pre_code_nested() {
+        // AtCoder の一部ページでは <pre><code>...</code></pre> 構造を持つ
+        let html = r#"
+<html><body>
+  <section>
+    <h3>入力例 1</h3>
+    <pre><code>3 5
+</code></pre>
+  </section>
+  <section>
+    <h3>出力例 1</h3>
+    <pre><code>8
+</code></pre>
+  </section>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].input, "3 5\n");
+        assert_eq!(samples[0].output, "8\n");
+    }
+
+    #[test]
+    fn parse_samples_normalizes_trailing_newline() {
+        // <pre> テキストが末尾に複数の改行や空白を持つ場合でも \n 1 つに正規化される
+        let html = r#"
+<html><body>
+  <section>
+    <h3>Sample Input 1</h3>
+    <pre>1 2 3
+
+
+</pre>
+  </section>
+  <section>
+    <h3>Sample Output 1</h3>
+    <pre>6   </pre>
+  </section>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples[0].input, "1 2 3\n");
+        assert_eq!(samples[0].output, "6\n");
+    }
+
+    #[test]
+    fn parse_samples_input_output_count_mismatch_returns_error() {
+        // 出力例が入力例より少ない場合はエラー
+        let html = r#"
+<html><body>
+  <section>
+    <h3>入力例 1</h3>
+    <pre>3 5</pre>
+  </section>
+  <section>
+    <h3>入力例 2</h3>
+    <pre>10 20</pre>
+  </section>
+  <section>
+    <h3>出力例 1</h3>
+    <pre>8</pre>
+  </section>
+</body></html>
+"#;
+        let err = parse_samples(html).unwrap_err();
+        assert!(matches!(err, AppError::SampleParse(_)));
+        let msg = err.to_string();
+        assert!(msg.contains("2") && msg.contains("1"), "エラーメッセージに件数が含まれること: {msg}");
+    }
+
+    #[test]
+    fn parse_samples_multiple_japanese() {
+        // 日本語ラベルで複数サンプル
+        let html = r#"
+<html><body>
+  <section><h3>入力例 1</h3><pre>1</pre></section>
+  <section><h3>出力例 1</h3><pre>2</pre></section>
+  <section><h3>入力例 2</h3><pre>3</pre></section>
+  <section><h3>出力例 2</h3><pre>4</pre></section>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 2);
+        assert_eq!(samples[0].input.trim(), "1");
+        assert_eq!(samples[0].output.trim(), "2");
+        assert_eq!(samples[1].input.trim(), "3");
+        assert_eq!(samples[1].output.trim(), "4");
+    }
+
+    // ─── normalize_pre_text ─────────────────────────────────────
+
+    #[test]
+    fn normalize_pre_text_strips_trailing_newlines() {
+        assert_eq!(normalize_pre_text("3 5\n\n".to_string()), "3 5\n");
+    }
+
+    #[test]
+    fn normalize_pre_text_strips_trailing_spaces() {
+        assert_eq!(normalize_pre_text("8   ".to_string()), "8\n");
+    }
+
+    #[test]
+    fn normalize_pre_text_preserves_internal_newlines() {
+        assert_eq!(normalize_pre_text("1 2\n3 4\n".to_string()), "1 2\n3 4\n");
+    }
+
+    #[test]
+    fn normalize_pre_text_empty_string() {
+        assert_eq!(normalize_pre_text(String::new()), "");
+    }
+
+    #[test]
+    fn normalize_pre_text_only_whitespace() {
+        assert_eq!(normalize_pre_text("   \n\n".to_string()), "");
     }
 }

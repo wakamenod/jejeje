@@ -159,10 +159,12 @@ je new https://atcoder.jp/contests/abc001
 
 #### AtCoder スクレイパー実装 (`src/judge/atcoder.rs`)
 
-- [ ] `fetch_samples`: 問題ページの `<section>` ブロックから入力例・出力例をパース
-  - `<h3>` タグで "入力例" / "出力例" / "Sample Input" / "Sample Output" を検出
-  - `<pre>` タグからサンプルテキストを抽出
-  - 日本語・英語両対応
+- [x] `fetch_samples`: 問題ページの `<section>` ブロックから入力例・出力例をパース
+  - [x] `<h3>` タグで "入力例" / "出力例" / "Sample Input" / "Sample Output" を検出
+  - [x] `<pre>` タグからサンプルテキストを抽出（`<pre><code>` ネスト構造にも対応）
+  - [x] 日本語・英語両対応
+  - [x] 末尾改行の正規化（`\n` 1 つに統一）
+  - [x] 入力例・出力例の件数不一致時にエラーを返す
 - [ ] `fetch_contest`: タスク一覧ページ (`/contests/{id}/tasks`) のテーブルをパース
   - `#task-table tbody tr` からタスク ID・名前・URL を抽出
 - [ ] `fetch_contest`: コンテストトップページからコンテスト名を取得
