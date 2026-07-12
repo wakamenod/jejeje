@@ -1,8 +1,15 @@
 //! AtCoder のサンプル取得・コンテスト情報取得。
 //!
 //! # URL パターン
+//! ## 現行形式
 //! - コンテスト: `https://atcoder.jp/contests/{contest_id}`
 //! - 問題:       `https://atcoder.jp/contests/{contest_id}/tasks/{task_id}`
+//!
+//! ## 旧形式（サブドメイン形式）
+//! - コンテスト: `https://{contest_id}.contest.atcoder.jp/`
+//! - 問題:       `https://{contest_id}.contest.atcoder.jp/tasks/{task_id}`
+//!
+//! 旧形式 URL は [`normalize_url`] で現行形式に変換してから処理する。
 
 use super::model::{ContestMeta, SampleCase, TaskMeta};
 use crate::error::AppError;
@@ -13,31 +20,87 @@ const BASE: &str = "https://atcoder.jp";
 // ─── URL 判定 ──────────────────────────────────────────────────────
 
 /// AtCoder のコンテスト URL か問題 URL のいずれかであれば `true`。
+///
+/// 現行形式 (`atcoder.jp/contests/`) と旧サブドメイン形式
+/// (`*.contest.atcoder.jp`) の両方を認識する。
 pub fn is_url(url: &str) -> bool {
-    url.contains("atcoder.jp/contests/")
+    url.contains("atcoder.jp/contests/") || is_legacy_url(url)
 }
 
 /// コンテスト URL（タスク URL ではない）なら `true`。
 ///
-/// 例: `https://atcoder.jp/contests/abc001`
+/// 例 (現行): `https://atcoder.jp/contests/abc001`
+/// 例 (旧形式): `https://abc001.contest.atcoder.jp/`
 pub fn is_contest_url(url: &str) -> bool {
     is_url(url) && !url.contains("/tasks")
 }
 
 /// 問題 URL なら `true`。
 ///
-/// 例: `https://atcoder.jp/contests/abc001/tasks/abc001_a`
+/// 例 (現行): `https://atcoder.jp/contests/abc001/tasks/abc001_a`
+/// 例 (旧形式): `https://abc001.contest.atcoder.jp/tasks/abc001_a`
 pub fn is_problem_url(url: &str) -> bool {
     is_url(url) && url.contains("/tasks/")
+}
+
+/// 旧サブドメイン形式 (`{id}.contest.atcoder.jp`) の URL なら `true`。
+fn is_legacy_url(url: &str) -> bool {
+    url.contains(".contest.atcoder.jp")
+}
+
+/// 旧形式 URL を現行形式 URL へ正規化する。
+///
+/// - `https://abc001.contest.atcoder.jp/`
+///   → `https://atcoder.jp/contests/abc001`
+/// - `https://abc001.contest.atcoder.jp/tasks/abc001_a`
+///   → `https://atcoder.jp/contests/abc001/tasks/abc001_a`
+///
+/// 旧形式でない URL はそのまま返す。
+pub fn normalize_url(url: &str) -> String {
+    if !is_legacy_url(url) {
+        return url.to_string();
+    }
+
+    let contest_id = extract_contest_id_legacy(url).unwrap_or_default();
+
+    // パス部分 ("/tasks/abc001_a" など) を取り出す
+    // スキーム + ホスト以降のパス: "https://abc001.contest.atcoder.jp/tasks/abc001_a"
+    //   → "/tasks/abc001_a"
+    let path = url
+        .split_once("://")
+        .and_then(|(_, rest)| rest.split_once('/'))
+        .map(|(_, path)| path.trim_end_matches('/'))
+        .unwrap_or("");
+
+    if path.is_empty() {
+        format!("{BASE}/contests/{contest_id}")
+    } else {
+        format!("{BASE}/contests/{contest_id}/{path}")
+    }
+}
+
+/// 旧形式 URL (`{id}.contest.atcoder.jp`) からコンテスト ID を抽出する。
+fn extract_contest_id_legacy(url: &str) -> Result<String, AppError> {
+    // "https://abc001.contest.atcoder.jp/..." → "abc001"
+    url.split_once("://")
+        .map(|(_, rest)| rest)
+        .and_then(|rest| rest.split('.').next())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .ok_or_else(|| AppError::UnsupportedUrl(url.to_string()))
 }
 
 // ─── コンテスト取得 ─────────────────────────────────────────────────
 
 /// コンテスト URL からタスク一覧を含むメタデータを取得する。
+///
+/// 旧サブドメイン形式 URL が渡された場合は自動的に現行形式へ正規化する。
 pub async fn fetch_contest(
     url: &str,
     client: &reqwest::Client,
 ) -> Result<ContestMeta, AppError> {
+    let url = &normalize_url(url);
+
     // コンテスト ID を URL から抽出
     // e.g. https://atcoder.jp/contests/abc001 → "abc001"
     let contest_id = extract_contest_id(url)?;
@@ -64,11 +127,14 @@ pub async fn fetch_contest(
 // ─── サンプル取得 ───────────────────────────────────────────────────
 
 /// 問題 URL からサンプルケース一覧を取得する。
+///
+/// 旧サブドメイン形式 URL が渡された場合は自動的に現行形式へ正規化する。
 pub async fn fetch_samples(
     url: &str,
     client: &reqwest::Client,
 ) -> Result<Vec<SampleCase>, AppError> {
-    let html = fetch_html(url, client).await?;
+    let url = normalize_url(url);
+    let html = fetch_html(&url, client).await?;
     parse_samples(&html)
 }
 
@@ -222,6 +288,9 @@ fn parse_contest_name(html: &str) -> Option<String> {
 // ─── ヘルパー ──────────────────────────────────────────────────────
 
 fn extract_contest_id(url: &str) -> Result<String, AppError> {
+    if is_legacy_url(url) {
+        return extract_contest_id_legacy(url);
+    }
     // "https://atcoder.jp/contests/abc001" → "abc001"
     url.trim_end_matches('/')
         .split("/contests/")
@@ -240,7 +309,7 @@ async fn fetch_html(url: &str, client: &reqwest::Client) -> Result<String, AppEr
 mod tests {
     use super::*;
 
-    // ─── URL 判定 ─────────────────────────────────────────────────
+    // ─── URL 判定（現行形式） ─────────────────────────────────────
 
     #[test]
     fn is_url_contest() {
@@ -283,6 +352,89 @@ mod tests {
         assert!(!is_problem_url("https://atcoder.jp/contests/abc001"));
     }
 
+    // ─── URL 判定（旧サブドメイン形式） ──────────────────────────
+
+    #[test]
+    fn is_url_legacy_contest() {
+        assert!(is_url("https://abc001.contest.atcoder.jp/"));
+    }
+
+    #[test]
+    fn is_url_legacy_contest_http() {
+        assert!(is_url("http://abc001.contest.atcoder.jp/"));
+    }
+
+    #[test]
+    fn is_url_legacy_problem() {
+        assert!(is_url(
+            "https://abc001.contest.atcoder.jp/tasks/abc001_a"
+        ));
+    }
+
+    #[test]
+    fn is_contest_url_legacy_true() {
+        assert!(is_contest_url("https://abc001.contest.atcoder.jp/"));
+    }
+
+    #[test]
+    fn is_contest_url_legacy_false_for_problem() {
+        assert!(!is_contest_url(
+            "https://abc001.contest.atcoder.jp/tasks/abc001_a"
+        ));
+    }
+
+    #[test]
+    fn is_problem_url_legacy_true() {
+        assert!(is_problem_url(
+            "https://abc001.contest.atcoder.jp/tasks/abc001_a"
+        ));
+    }
+
+    #[test]
+    fn is_problem_url_legacy_false_for_contest() {
+        assert!(!is_problem_url("https://abc001.contest.atcoder.jp/"));
+    }
+
+    // ─── normalize_url ───────────────────────────────────────────
+
+    #[test]
+    fn normalize_url_legacy_contest() {
+        assert_eq!(
+            normalize_url("https://abc001.contest.atcoder.jp/"),
+            "https://atcoder.jp/contests/abc001"
+        );
+    }
+
+    #[test]
+    fn normalize_url_legacy_contest_no_trailing_slash() {
+        assert_eq!(
+            normalize_url("https://abc001.contest.atcoder.jp"),
+            "https://atcoder.jp/contests/abc001"
+        );
+    }
+
+    #[test]
+    fn normalize_url_legacy_problem() {
+        assert_eq!(
+            normalize_url("https://abc001.contest.atcoder.jp/tasks/abc001_a"),
+            "https://atcoder.jp/contests/abc001/tasks/abc001_a"
+        );
+    }
+
+    #[test]
+    fn normalize_url_legacy_http_scheme() {
+        assert_eq!(
+            normalize_url("http://abc001.contest.atcoder.jp/tasks/abc001_a"),
+            "https://atcoder.jp/contests/abc001/tasks/abc001_a"
+        );
+    }
+
+    #[test]
+    fn normalize_url_modern_is_unchanged() {
+        let url = "https://atcoder.jp/contests/abc001/tasks/abc001_a";
+        assert_eq!(normalize_url(url), url);
+    }
+
     // ─── extract_contest_id ──────────────────────────────────────
 
     #[test]
@@ -310,6 +462,21 @@ mod tests {
     fn extract_contest_id_unsupported_url() {
         let err = extract_contest_id("https://example.com/foo").unwrap_err();
         assert!(matches!(err, AppError::UnsupportedUrl(_)));
+    }
+
+    #[test]
+    fn extract_contest_id_legacy_contest() {
+        let id = extract_contest_id("https://abc001.contest.atcoder.jp/").unwrap();
+        assert_eq!(id, "abc001");
+    }
+
+    #[test]
+    fn extract_contest_id_legacy_problem() {
+        let id = extract_contest_id(
+            "https://abc001.contest.atcoder.jp/tasks/abc001_a",
+        )
+        .unwrap();
+        assert_eq!(id, "abc001");
     }
 
     // ─── parse_contest_name ──────────────────────────────────────

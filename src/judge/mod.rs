@@ -106,6 +106,22 @@ mod tests {
     }
 
     #[test]
+    fn from_url_atcoder_legacy_contest() {
+        let kind =
+            JudgeKind::from_url("https://abc001.contest.atcoder.jp/").unwrap();
+        assert_eq!(kind, JudgeKind::AtCoder);
+    }
+
+    #[test]
+    fn from_url_atcoder_legacy_problem() {
+        let kind = JudgeKind::from_url(
+            "https://abc001.contest.atcoder.jp/tasks/abc001_a",
+        )
+        .unwrap();
+        assert_eq!(kind, JudgeKind::AtCoder);
+    }
+
+    #[test]
     fn from_url_codeforces_contest() {
         let kind =
             JudgeKind::from_url("https://codeforces.com/contest/1234").unwrap();

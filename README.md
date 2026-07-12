@@ -168,7 +168,7 @@ je new https://atcoder.jp/contests/abc001
 - [x] `fetch_contest`: タスク一覧ページ (`/contests/{id}/tasks`) のテーブルをパース
   - [x] `#task-table tbody tr` からタスク ID・名前・URL を抽出
 - [x] `fetch_contest`: コンテストトップページからコンテスト名を取得
-- [ ] 旧 URL 形式への対応 (`abc001.contest.atcoder.jp` 形式)
+- [x] 旧 URL 形式への対応 (`abc001.contest.atcoder.jp` 形式)
 - [ ] リクエスト間の待機処理（過負荷防止、1 秒程度）
 
 #### Codeforces スクレイパー実装 (`src/judge/codeforces.rs`)
