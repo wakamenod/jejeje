@@ -165,9 +165,9 @@ je new https://atcoder.jp/contests/abc001
   - [x] 日本語・英語両対応
   - [x] 末尾改行の正規化（`\n` 1 つに統一）
   - [x] 入力例・出力例の件数不一致時にエラーを返す
-- [ ] `fetch_contest`: タスク一覧ページ (`/contests/{id}/tasks`) のテーブルをパース
-  - `#task-table tbody tr` からタスク ID・名前・URL を抽出
-- [ ] `fetch_contest`: コンテストトップページからコンテスト名を取得
+- [x] `fetch_contest`: タスク一覧ページ (`/contests/{id}/tasks`) のテーブルをパース
+  - [x] `#task-table tbody tr` からタスク ID・名前・URL を抽出
+- [x] `fetch_contest`: コンテストトップページからコンテスト名を取得
 - [ ] 旧 URL 形式への対応 (`abc001.contest.atcoder.jp` 形式)
 - [ ] リクエスト間の待機処理（過負荷防止、1 秒程度）
 
