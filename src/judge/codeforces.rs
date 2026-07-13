@@ -10,6 +10,11 @@
 use super::model::{ContestMeta, SampleCase, TaskMeta};
 use crate::error::AppError;
 use scraper::{Html, Selector};
+use std::time::Duration;
+use tokio::time::sleep;
+
+/// Codeforces へのリクエスト間の待機時間（過負荷防止）。
+const REQUEST_INTERVAL: Duration = Duration::from_secs(1);
 
 const BASE: &str = "https://codeforces.com";
 
@@ -198,7 +203,12 @@ fn extract_contest_id(url: &str) -> Result<String, AppError> {
     Ok(segment.split('/').next().unwrap_or("").to_string())
 }
 
+/// URL から HTML を取得する。
+///
+/// リクエスト前に [`REQUEST_INTERVAL`] だけ待機し、Codeforces サーバーへの
+/// 過負荷を防ぐ。
 async fn fetch_html(url: &str, client: &reqwest::Client) -> Result<String, AppError> {
+    sleep(REQUEST_INTERVAL).await;
     let resp = client.get(url).send().await?;
     Ok(resp.text().await?)
 }

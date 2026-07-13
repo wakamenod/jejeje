@@ -176,7 +176,7 @@ je prepare https://atcoder.jp/contests/abc001
 - [x] `fetch_contest`: コンテストページの `table.problems` からタスク一覧をパース
 - [x] Gym URL (`/gym/{id}`) の対応
 - [x] Problemset URL (`/problemset/problem/{id}/{id}`) の対応（URL 判定）
-- [ ] リクエスト間の待機処理
+- [x] リクエスト間の待機処理（過負荷防止、1 秒程度）
 
 #### yukicoder API 実装 (`src/judge/yukicoder.rs`)
 
