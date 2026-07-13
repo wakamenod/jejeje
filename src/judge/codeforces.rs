@@ -123,8 +123,14 @@ fn parse_contest_problems(
 /// 構造:
 /// ```html
 /// <div class="sample-test">
-///   <div class="input"><pre>...</pre></div>
-///   <div class="output"><pre>...</pre></div>
+///   <div class="input">
+///     <div class="title">Input</div>
+///     <pre>...</pre>
+///   </div>
+///   <div class="output">
+///     <div class="title">Output</div>
+///     <pre>...</pre>
+///   </div>
 /// </div>
 /// ```
 fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
@@ -134,12 +140,12 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
 
     let inputs: Vec<String> = doc
         .select(&input_sel)
-        .map(|el| el.text().collect::<String>())
+        .map(|el| normalize_pre_text(el.text().collect::<String>()))
         .collect();
 
     let outputs: Vec<String> = doc
         .select(&output_sel)
-        .map(|el| el.text().collect::<String>())
+        .map(|el| normalize_pre_text(el.text().collect::<String>()))
         .collect();
 
     if inputs.is_empty() {
@@ -153,6 +159,19 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
         .zip(outputs)
         .map(|(input, output)| SampleCase { input, output })
         .collect())
+}
+
+/// `<pre>` テキストを正規化する。
+///
+/// - 末尾の空白・改行文字を除去し、`\n` 1 つで終わるよう統一する
+/// - 空文字列の場合はそのまま返す
+fn normalize_pre_text(s: String) -> String {
+    let trimmed = s.trim_end_matches(['\n', '\r', ' ']);
+    if trimmed.is_empty() {
+        String::new()
+    } else {
+        format!("{trimmed}\n")
+    }
 }
 
 fn parse_contest_name(html: &str) -> Option<String> {
@@ -314,15 +333,21 @@ mod tests {
         let html = r#"
 <html><body>
 <div class="sample-test">
-  <div class="input"><pre>3 5</pre></div>
-  <div class="output"><pre>8</pre></div>
+  <div class="input">
+    <div class="title">Input</div>
+    <pre>3 5</pre>
+  </div>
+  <div class="output">
+    <div class="title">Output</div>
+    <pre>8</pre>
+  </div>
 </div>
 </body></html>
 "#;
         let samples = parse_samples(html).unwrap();
         assert_eq!(samples.len(), 1);
-        assert_eq!(samples[0].input.trim(), "3 5");
-        assert_eq!(samples[0].output.trim(), "8");
+        assert_eq!(samples[0].input, "3 5\n");
+        assert_eq!(samples[0].output, "8\n");
     }
 
     #[test]
@@ -339,6 +364,44 @@ mod tests {
 "#;
         let samples = parse_samples(html).unwrap();
         assert_eq!(samples.len(), 2);
+        assert_eq!(samples[0].input, "1\n");
+        assert_eq!(samples[1].input, "2\n");
+    }
+
+    #[test]
+    fn parse_samples_multiline_input() {
+        let html = r#"
+<html><body>
+<div class="sample-test">
+  <div class="input"><pre>3
+1 2 3</pre></div>
+  <div class="output"><pre>6</pre></div>
+</div>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].input, "3\n1 2 3\n");
+        assert_eq!(samples[0].output, "6\n");
+    }
+
+    #[test]
+    fn parse_samples_trailing_newlines_normalized() {
+        let html = r#"
+<html><body>
+<div class="sample-test">
+  <div class="input"><pre>42
+
+</pre></div>
+  <div class="output"><pre>yes
+
+</pre></div>
+</div>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples[0].input, "42\n");
+        assert_eq!(samples[0].output, "yes\n");
     }
 
     #[test]
@@ -346,6 +409,38 @@ mod tests {
         let html = "<html><body><p>No samples</p></body></html>";
         let err = parse_samples(html).unwrap_err();
         assert!(matches!(err, AppError::SampleParse(_)));
+    }
+
+    // ─── normalize_pre_text ──────────────────────────────────────
+
+    #[test]
+    fn normalize_pre_text_adds_trailing_newline() {
+        assert_eq!(normalize_pre_text("3 5".to_string()), "3 5\n");
+    }
+
+    #[test]
+    fn normalize_pre_text_strips_extra_trailing_newlines() {
+        assert_eq!(normalize_pre_text("8\n\n".to_string()), "8\n");
+    }
+
+    #[test]
+    fn normalize_pre_text_strips_trailing_spaces() {
+        assert_eq!(normalize_pre_text("hello   ".to_string()), "hello\n");
+    }
+
+    #[test]
+    fn normalize_pre_text_preserves_internal_newlines() {
+        assert_eq!(normalize_pre_text("1 2\n3 4\n".to_string()), "1 2\n3 4\n");
+    }
+
+    #[test]
+    fn normalize_pre_text_empty_string() {
+        assert_eq!(normalize_pre_text(String::new()), "");
+    }
+
+    #[test]
+    fn normalize_pre_text_only_whitespace() {
+        assert_eq!(normalize_pre_text("   \n\n".to_string()), "");
     }
 
     // ─── parse_contest_name ──────────────────────────────────────

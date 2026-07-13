@@ -169,11 +169,13 @@ je prepare https://atcoder.jp/contests/abc001
 
 #### Codeforces スクレイパー実装 (`src/judge/codeforces.rs`)
 
-- [ ] `fetch_samples`: 問題ページの `<div class="sample-test">` からサンプルをパース
-  - `div.input pre` と `div.output pre` を対応付け
-- [ ] `fetch_contest`: コンテストページの `table.problems` からタスク一覧をパース
-- [ ] Gym URL (`/gym/{id}`) の対応
-- [ ] Problemset URL (`/problemset/problem/{id}/{id}`) の対応
+- [x] `fetch_samples`: 問題ページの `<div class="sample-test">` からサンプルをパース
+  - [x] `div.input pre` と `div.output pre` を対応付け
+  - [x] `<div class="title">` を含む実際の HTML 構造に対応
+  - [x] 末尾改行の正規化（`\n` 1 つに統一）
+- [x] `fetch_contest`: コンテストページの `table.problems` からタスク一覧をパース
+- [x] Gym URL (`/gym/{id}`) の対応
+- [x] Problemset URL (`/problemset/problem/{id}/{id}`) の対応（URL 判定）
 - [ ] リクエスト間の待機処理
 
 #### yukicoder API 実装 (`src/judge/yukicoder.rs`)
