@@ -142,7 +142,7 @@ je prepare https://atcoder.jp/contests/abc001
 |---|---|---|---|
 | AtCoder | ✅ | ✅ | HTML スクレイピング |
 | Codeforces | ✅ | ✅ | HTML スクレイピング |
-| yukicoder | ✅ | ✅ | 公式 REST API |
+| yukicoder | ✅ | ✅ | サンプル: HTML スクレイピング / コンテスト: 公式 REST API |
 | AOJ | ✅ | ✅ | 公式 REST API |
 
 ---
@@ -178,12 +178,12 @@ je prepare https://atcoder.jp/contests/abc001
 - [x] Problemset URL (`/problemset/problem/{id}/{id}`) の対応（URL 判定）
 - [x] リクエスト間の待機処理（過負荷防止、1 秒程度）
 
-#### yukicoder API 実装 (`src/judge/yukicoder.rs`)
+#### yukicoder 実装 (`src/judge/yukicoder.rs`)
 
-- [ ] `fetch_samples`: 実際の API エンドポイントの確認・実装
-  - 現在 `/api/v1/problems/{no}/file/in` を想定しているが要検証
-  - レスポンス形式の確認と型定義の修正
-- [ ] `fetch_contest`: `/api/v1/contest/id/{id}` のレスポンスからタスク一覧を組み立て
+- [x] `fetch_samples`: 問題ページの HTML をスクレイピングしてサンプルを取得
+  - `/api/v1/problems/{no}/file/in` は `BearerAuth` 必須で認証なしでは利用不可
+  - `div.sample > pre` からサンプル入出力を抽出（`pre[0]`=入力、`pre[1]`=出力）
+- [x] `fetch_contest`: `/api/v1/contest/id/{id}` のレスポンスからタスク一覧を組み立て
   - `ProblemIdList` の各 ID に対して個別に問題情報を取得する処理
 - [ ] API エラーレスポンスのハンドリング
 

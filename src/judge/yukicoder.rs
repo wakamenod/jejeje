@@ -1,8 +1,25 @@
 //! yukicoder のサンプル取得・コンテスト情報取得。
 //!
-//! yukicoder は公式 REST API を提供しているため、スクレイピングではなく API を使用する。
+//! # サンプル取得
+//! yukicoder の `/api/v1/problems/{no}/file/in` は `BearerAuth` が必須であり
+//! 一般ユーザーが認証なしで呼び出すことはできない。
+//! そのため、サンプルは問題ページの HTML をスクレイピングして取得する。
 //!
-//! # API エンドポイント
+//! HTML 構造:
+//! ```html
+//! <div class="sample" data-file="01_sample_01.txt">
+//!   <h5>サンプル1</h5>
+//!   <div class="paragraph">
+//!     <h6>入力</h6>
+//!     <pre>…入力テキスト…</pre>
+//!     <h6>出力</h6>
+//!     <pre>…出力テキスト…</pre>
+//!   </div>
+//! </div>
+//! ```
+//!
+//! # コンテスト情報取得
+//! コンテスト情報は REST API を使用する。
 //! - コンテスト情報: `GET https://yukicoder.me/api/v1/contest/id/{contest_id}`
 //! - 問題情報:       `GET https://yukicoder.me/api/v1/problems/{problem_no}`
 //!
@@ -12,6 +29,7 @@
 
 use super::model::{ContestMeta, SampleCase, TaskMeta};
 use crate::error::AppError;
+use scraper::{Html, Selector};
 use serde::Deserialize;
 
 const BASE: &str = "https://yukicoder.me";
@@ -49,14 +67,6 @@ struct ApiProblem {
     no: u64,
     #[serde(rename = "Title")]
     title: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct ApiSample {
-    #[serde(rename = "Input")]
-    input: String,
-    #[serde(rename = "Output")]
-    output: String,
 }
 
 // ─── コンテスト取得 ─────────────────────────────────────────────────
@@ -105,30 +115,69 @@ pub async fn fetch_contest(
 
 // ─── サンプル取得 ───────────────────────────────────────────────────
 
+/// 問題ページの HTML をスクレイピングしてサンプルケースを取得する。
+///
+/// yukicoder の `/api/v1/problems/{no}/file/{in,out}` は `BearerAuth` が必須で
+/// 認証なしでは利用できないため、HTML から `div.sample` を解析する方式を採用する。
+///
+/// # HTML 構造
+/// ```html
+/// <div class="sample" data-file="01_sample_01.txt">
+///   <div class="paragraph">
+///     <h6>入力</h6><pre>…</pre>
+///     <h6>出力</h6><pre>…</pre>
+///   </div>
+/// </div>
+/// ```
 pub async fn fetch_samples(
     url: &str,
     client: &reqwest::Client,
 ) -> Result<Vec<SampleCase>, AppError> {
     let problem_no = extract_problem_no(url)?;
-    let api_url = format!("{API_BASE}/problems/{problem_no}/file/in");
+    let page_url = format!("{BASE}/problems/no/{problem_no}");
 
-    // yukicoder API でサンプル一覧を取得
-    // GET /api/v1/problems/{no}/file/in → サンプル入出力の配列
-    let samples: Vec<ApiSample> = client
-        .get(&api_url)
+    let html = client
+        .get(&page_url)
         .send()
         .await?
-        .json()
-        .await
-        .map_err(|_| AppError::SampleParse("Failed to fetch samples from yukicoder API".to_string()))?;
+        .text()
+        .await?;
 
-    Ok(samples
-        .into_iter()
-        .map(|s| SampleCase {
-            input: s.input,
-            output: s.output,
-        })
-        .collect())
+    parse_samples(&html).map_err(AppError::SampleParse)
+}
+
+/// HTML 文字列から `div.sample` ブロックを解析してサンプルケースを返す。
+///
+/// 各 `div.sample` ブロック内の `pre` タグを順に取得し、
+/// 偶数番目（0-indexed）を入力、奇数番目を出力として対にする。
+fn parse_samples(html: &str) -> Result<Vec<SampleCase>, String> {
+    let document = Html::parse_document(html);
+
+    let sample_sel = Selector::parse("div.sample").map_err(|e| e.to_string())?;
+    let pre_sel = Selector::parse("pre").map_err(|e| e.to_string())?;
+
+    let mut samples = Vec::new();
+
+    for sample_div in document.select(&sample_sel) {
+        let pres: Vec<String> = sample_div
+            .select(&pre_sel)
+            .map(|el| el.text().collect::<String>())
+            .collect();
+
+        // 各 div.sample に <pre>入力</pre> <pre>出力</pre> が含まれる
+        if pres.len() >= 2 {
+            samples.push(SampleCase {
+                input: pres[0].clone(),
+                output: pres[1].clone(),
+            });
+        }
+    }
+
+    if samples.is_empty() {
+        return Err("no sample blocks (div.sample) found in the page".to_string());
+    }
+
+    Ok(samples)
 }
 
 // ─── ヘルパー ──────────────────────────────────────────────────────
@@ -238,5 +287,79 @@ mod tests {
     fn extract_problem_no_unsupported() {
         let err = extract_problem_no("https://example.com/foo").unwrap_err();
         assert!(matches!(err, AppError::UnsupportedUrl(_)));
+    }
+
+    // ─── parse_samples ───────────────────────────────────────────
+
+    #[test]
+    fn parse_samples_single() {
+        let html = r#"
+            <html><body>
+            <div class="sample" data-file="01_sample_01.txt">
+              <h5>サンプル1</h5>
+              <div class="paragraph">
+                <h6>入力</h6>
+                <pre>3
+100
+</pre>
+                <h6>出力</h6>
+                <pre>20
+</pre>
+              </div>
+            </div>
+            </body></html>
+        "#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].input, "3\n100\n");
+        assert_eq!(samples[0].output, "20\n");
+    }
+
+    #[test]
+    fn parse_samples_multiple() {
+        let html = r#"
+            <html><body>
+            <div class="sample" data-file="01_sample_01.txt">
+              <div class="paragraph">
+                <pre>1</pre>
+                <pre>YES</pre>
+              </div>
+            </div>
+            <div class="sample" data-file="01_sample_02.txt">
+              <div class="paragraph">
+                <pre>0</pre>
+                <pre>NO</pre>
+              </div>
+            </div>
+            </body></html>
+        "#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 2);
+        assert_eq!(samples[0].input, "1");
+        assert_eq!(samples[0].output, "YES");
+        assert_eq!(samples[1].input, "0");
+        assert_eq!(samples[1].output, "NO");
+    }
+
+    #[test]
+    fn parse_samples_no_sample_div_returns_err() {
+        let html = "<html><body><p>no samples here</p></body></html>";
+        let err = parse_samples(html).unwrap_err();
+        assert!(err.contains("no sample blocks"));
+    }
+
+    #[test]
+    fn parse_samples_skips_incomplete_block() {
+        // pre が 1 つしかないブロックはスキップ、2つあるものだけ返す
+        let html = r#"
+            <html><body>
+            <div class="sample"><pre>only input</pre></div>
+            <div class="sample"><pre>input</pre><pre>output</pre></div>
+            </body></html>
+        "#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].input, "input");
+        assert_eq!(samples[0].output, "output");
     }
 }
