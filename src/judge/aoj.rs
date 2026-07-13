@@ -11,14 +11,17 @@
 //!   レスポンス: `{"_embedded": {"topics": [{"_links": {"self": {"href": ".../topics/{id}"}}, ...}, ...]}}`
 //! - トピック問題一覧: `GET https://judgeapi.u-aizu.ac.jp/topics/{topic_id}/problems`
 //!   レスポンス: `{"_embedded": {"problems": [{"name": "...", "_links": {"self": {"href": ".../problems/{problem_id}"}}, ...}, ...]}}`
+//! - Volume 問題一覧:  `GET https://judgeapi.u-aizu.ac.jp/problems/volumes/{vol_no}?page=0&size={n}`
+//!   レスポンス: `{"numberOfProblems": N, "problems": [{"id": "0100", "name": "...", ...}, ...]}`
 //!
 //! # URL パターン
 //! - 問題: `https://onlinejudge.u-aizu.ac.jp/problems/{problem_id}`
-//!         `https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id={problem_id}`
-//! - コース: `https://onlinejudge.u-aizu.ac.jp/courses/lesson/{...}`
+//!   または `https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id={problem_id}`
+//! - コース:  `https://onlinejudge.u-aizu.ac.jp/courses/lesson/{...}`
+//! - Volume: `https://onlinejudge.u-aizu.ac.jp/challenges/volumes/{vol_no}`
 //!
 //! Note: AOJ は AtCoder / Codeforces のような「コンテスト」の概念が薄く、
-//!       常設問題集（Volume / Course）が主体。`fetch_contest` はコース対応の簡易実装。
+//!       常設問題集（Volume / Course）が主体。`fetch_contest` はコース・Volume 対応の簡易実装。
 
 use super::model::{ContestMeta, SampleCase, TaskMeta};
 use crate::error::AppError;
@@ -34,7 +37,11 @@ pub fn is_url(url: &str) -> bool {
 }
 
 pub fn is_contest_url(url: &str) -> bool {
-    is_url(url) && url.contains("/courses/")
+    is_url(url) && (url.contains("/courses/") || url.contains("/volumes/"))
+}
+
+pub fn is_volume_url(url: &str) -> bool {
+    is_url(url) && url.contains("/volumes/")
 }
 
 pub fn is_problem_url(url: &str) -> bool {
@@ -117,12 +124,29 @@ struct ApiTopicProblemsEmbedded {
     problems: Vec<ApiTopicProblem>,
 }
 
+/// `GET /problems/volumes/{vol_no}` のレスポンス
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApiVolumeResponse {
+    number_of_problems: u64,
+    problems: Vec<ApiVolumeProblem>,
+}
+
+/// Volume 問題一覧の各エントリ
+#[derive(Debug, Deserialize)]
+struct ApiVolumeProblem {
+    id: String,
+    name: String,
+}
+
 // ─── コンテスト取得（コース対応）───────────────────────────────────
 
-/// AOJ のコース URL からタスク一覧を取得する。
+/// AOJ のコース / Volume URL からタスク一覧を取得する。
 /// 通常の「コンテスト」には非対応。
 ///
-/// # 手順
+/// Volume URL の場合は `fetch_volume` に委譲する。
+///
+/// # コース URL の手順
 /// 1. `GET /courses` でコース一覧を取得し、URL から抽出した `shortName` に一致するコースを探す。
 /// 2. `GET /courses/{courseId}/topics` でトピック一覧を取得し、
 ///    各トピックの `_links.self.href` 末尾からトピック数値 ID を抽出する。
@@ -132,6 +156,10 @@ pub async fn fetch_contest(
     url: &str,
     client: &reqwest::Client,
 ) -> Result<ContestMeta, AppError> {
+    if is_volume_url(url) {
+        return fetch_volume(url, client).await;
+    }
+
     let short_name = extract_course_id(url)?;
 
     // ── Step 1: コース一覧から shortName に一致するコースを探す ──
@@ -222,6 +250,68 @@ pub async fn fetch_contest(
     })
 }
 
+// ─── Volume 取得 ────────────────────────────────────────────────────
+
+/// AOJ の Volume URL からタスク一覧を取得する。
+///
+/// # 手順
+/// 1. `GET /problems/volumes/{vol_no}?page=0&size=1` で `numberOfProblems` を取得する。
+/// 2. `GET /problems/volumes/{vol_no}?page=0&size={numberOfProblems}` で全問題を一括取得する。
+async fn fetch_volume(
+    url: &str,
+    client: &reqwest::Client,
+) -> Result<ContestMeta, AppError> {
+    let vol_no = extract_volume_id(url)?;
+
+    // ── Step 1: 問題数を先読み ──
+    let probe_url = format!("{JUDGE_API}/problems/volumes/{vol_no}?page=0&size=1");
+    let probe: ApiVolumeResponse = client
+        .get(&probe_url)
+        .send()
+        .await?
+        .json()
+        .await
+        .map_err(|_| {
+            AppError::SampleParse(format!(
+                "Failed to fetch AOJ volume {vol_no} metadata"
+            ))
+        })?;
+
+    let count = probe.number_of_problems.max(1);
+
+    // ── Step 2: 全問題を一括取得 ──
+    let all_url = format!("{JUDGE_API}/problems/volumes/{vol_no}?page=0&size={count}");
+    let all: ApiVolumeResponse = client
+        .get(&all_url)
+        .send()
+        .await?
+        .json()
+        .await
+        .map_err(|_| {
+            AppError::SampleParse(format!(
+                "Failed to fetch problem list for AOJ volume {vol_no}"
+            ))
+        })?;
+
+    let tasks = all
+        .problems
+        .into_iter()
+        .map(|p| TaskMeta {
+            url: format!("https://onlinejudge.u-aizu.ac.jp/problems/{}", p.id),
+            id: p.id.clone(),
+            name: p.name,
+        })
+        .collect();
+
+    Ok(ContestMeta {
+        judge: "aoj".to_string(),
+        contest_id: format!("volume{vol_no}"),
+        contest_name: format!("AOJ Volume {vol_no}"),
+        url: url.to_string(),
+        tasks,
+    })
+}
+
 // ─── サンプル取得 ───────────────────────────────────────────────────
 
 pub async fn fetch_samples(
@@ -278,6 +368,17 @@ fn extract_problem_id(url: &str) -> Result<String, AppError> {
             .ok_or_else(|| AppError::UnsupportedUrl(url.to_string()));
     }
     Err(AppError::UnsupportedUrl(url.to_string()))
+}
+
+fn extract_volume_id(url: &str) -> Result<String, AppError> {
+    // https://onlinejudge.u-aizu.ac.jp/challenges/volumes/1 → "1"
+    url.trim_end_matches('/')
+        .split("/volumes/")
+        .nth(1)
+        .and_then(|s| s.split('/').next())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .ok_or_else(|| AppError::UnsupportedUrl(url.to_string()))
 }
 
 fn extract_course_id(url: &str) -> Result<String, AppError> {
@@ -338,6 +439,27 @@ mod tests {
     }
 
     #[test]
+    fn is_contest_url_volume() {
+        assert!(is_contest_url(
+            "https://onlinejudge.u-aizu.ac.jp/challenges/volumes/1"
+        ));
+    }
+
+    #[test]
+    fn is_volume_url_true() {
+        assert!(is_volume_url(
+            "https://onlinejudge.u-aizu.ac.jp/challenges/volumes/1"
+        ));
+    }
+
+    #[test]
+    fn is_volume_url_false_for_course() {
+        assert!(!is_volume_url(
+            "https://onlinejudge.u-aizu.ac.jp/courses/lesson/2/ITP1/1"
+        ));
+    }
+
+    #[test]
     fn is_contest_url_false_for_problem() {
         assert!(!is_contest_url(
             "https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A"
@@ -390,6 +512,34 @@ mod tests {
     #[test]
     fn extract_problem_id_unsupported() {
         let err = extract_problem_id("https://example.com/foo").unwrap_err();
+        assert!(matches!(err, AppError::UnsupportedUrl(_)));
+    }
+
+    // ─── extract_course_id ──────────────────────────────────────
+
+    // ─── extract_volume_id ──────────────────────────────────────
+
+    #[test]
+    fn extract_volume_id_challenges_url() {
+        let id = extract_volume_id(
+            "https://onlinejudge.u-aizu.ac.jp/challenges/volumes/1",
+        )
+        .unwrap();
+        assert_eq!(id, "1");
+    }
+
+    #[test]
+    fn extract_volume_id_trailing_slash() {
+        let id = extract_volume_id(
+            "https://onlinejudge.u-aizu.ac.jp/challenges/volumes/20/",
+        )
+        .unwrap();
+        assert_eq!(id, "20");
+    }
+
+    #[test]
+    fn extract_volume_id_unsupported() {
+        let err = extract_volume_id("https://example.com/foo").unwrap_err();
         assert!(matches!(err, AppError::UnsupportedUrl(_)));
     }
 

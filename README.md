@@ -202,7 +202,11 @@ je prepare https://atcoder.jp/contests/abc001
   - `GET /courses/{courseId}/topics` (HAL 形式) で `_embedded.topics[]` を取得
   - `GET /topics/{topicId}/problems` (HAL 形式) で `_embedded.problems[]` を取得
   - 問題 ID / トピック ID は `_links.self.href` の末尾セグメントから抽出
-- [ ] Volume URL への対応（`/volumes/{vol_no}` 形式）
+- [x] Volume URL への対応（`/volumes/{vol_no}` 形式）
+  - `is_contest_url` が `/volumes/` を含む URL を認識するよう拡張
+  - `extract_volume_id` ヘルパーで URL から Volume 番号を抽出
+  - `GET /problems/volumes/{vol_no}?page=0&size={n}` で全問題を一括取得
+  - `fetch_contest` が Volume URL を検出して `fetch_volume` に委譲
 
 ---
 
