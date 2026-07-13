@@ -38,3 +38,5 @@ owo-colors = { version = "4", features = ["supports-colors"] }
 [dev-dependencies]
 # 一時ディレクトリ生成（ファイルシステムテスト用）
 tempfile = "3"
+# CLI バイナリの統合テスト用
+assert_cmd = "2"

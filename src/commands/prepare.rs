@@ -118,8 +118,17 @@ fn copy_template_safe(task_dir: &Path, template_name: &str, config: &Config) -> 
 
 /// URL からタスク ID を推定する。
 ///
-/// 例: `https://atcoder.jp/contests/abc001/tasks/abc001_a` → `"abc001_a"`
+/// 例:
+/// - `https://atcoder.jp/contests/abc001/tasks/abc001_a` → `"abc001_a"`
+/// - `https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=ITP1_1_A` → `"ITP1_1_A"`
 fn infer_task_id(url: &str) -> String {
+    // AOJ 旧形式: description.jsp?id=XXX
+    if url.contains("description.jsp") {
+        if let Some(id) = url.split("id=").nth(1).and_then(|s| s.split('&').next()) {
+            return id.to_string();
+        }
+    }
+
     url.trim_end_matches('/')
         .split('/')
         .last()
@@ -173,5 +182,25 @@ mod tests {
     #[test]
     fn infer_task_id_empty_string() {
         assert_eq!(infer_task_id(""), "");
+    }
+
+    #[test]
+    fn infer_task_id_aoj_description_jsp() {
+        assert_eq!(
+            infer_task_id(
+                "https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=ITP1_1_A"
+            ),
+            "ITP1_1_A"
+        );
+    }
+
+    #[test]
+    fn infer_task_id_aoj_description_jsp_with_extra_param() {
+        assert_eq!(
+            infer_task_id(
+                "https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=0001&lang=en"
+            ),
+            "0001"
+        );
     }
 }

@@ -136,6 +136,42 @@ je prepare https://atcoder.jp/contests/abc001
 # → abc001/a/main.cpp, abc001/b/main.cpp ... が自動配置される
 ```
 
+## 開発・テスト
+
+### ユニットテスト
+
+```bash
+cargo test
+```
+
+### 統合テスト（実サーバーへの HTTP リクエストあり）
+
+通常の `cargo test` では実行されません。`--ignored` フラグを付けて明示的に実行します。
+
+```bash
+# 全ジャッジのテストを実行
+cargo test --test integration_prepare -- --ignored
+
+# 特定のジャッジのみ実行
+cargo test --test integration_prepare atcoder -- --ignored
+cargo test --test integration_prepare codeforces -- --ignored
+cargo test --test integration_prepare yukicoder -- --ignored
+cargo test --test integration_prepare aoj -- --ignored
+```
+
+テスト対象:
+
+| テスト | 種別 | URL |
+|---|---|---|
+| AtCoder コンテスト | `abc001` 全 4 問 | `atcoder.jp/contests/abc001` |
+| AtCoder 旧 URL | 単問 | `abc001.contest.atcoder.jp/tasks/abc001_1` |
+| Codeforces コンテスト | `contest/1` 全 3 問 | `codeforces.com/contest/1` |
+| Codeforces 単問 | Problem A | `codeforces.com/contest/1/problem/A` |
+| yukicoder コンテスト | `contests/1` | `yukicoder.me/contests/1` |
+| yukicoder 単問 | No.1 | `yukicoder.me/problems/no/1` |
+| AOJ コース | ITP1 全問 | `onlinejudge.u-aizu.ac.jp/courses/lesson/1/ITP1` |
+| AOJ 旧 URL | 単問 | `judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=ITP1_1_A` |
+
 ## 対応ジャッジ
 
 | ジャッジ | サンプル取得 | コンテスト取得 | 取得方式 |
@@ -256,8 +292,10 @@ je prepare https://atcoder.jp/contests/abc001
 
 #### テスト・CI
 
-- [ ] 各ジャッジスクレイパーのユニットテスト（HTML フィクスチャを使ったパーステスト）
-- [ ] 統合テスト（実際の問題 URL に対するエンドツーエンドテスト）
+- [x] 各ジャッジスクレイパーのユニットテスト（HTML フィクスチャを使ったパーステスト）
+- [x] 統合テスト（実際の問題 URL に対するエンドツーエンドテスト）
+  - `tests/integration_prepare.rs` — `#[ignore]` で通常 CI から除外し、`--ignored` フラグで明示実行
+  - AtCoder（コンテスト / 旧 URL）・Codeforces（コンテスト / 単問）・yukicoder（コンテスト / 単問）・AOJ（コース / 旧 URL）の全 8 ケース
 - [ ] GitHub Actions による CI の設定
 - [ ] `cargo clippy` / `cargo fmt` の CI チェック
 
