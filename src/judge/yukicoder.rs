@@ -69,6 +69,27 @@ struct ApiProblem {
     title: String,
 }
 
+// ─── API ヘルパー ──────────────────────────────────────────────────
+
+/// レスポンスのステータスが非成功なら `AppError::ApiError` を返し、
+/// 成功なら JSON にデシリアライズして返す。
+async fn api_get<T: serde::de::DeserializeOwned>(
+    client: &reqwest::Client,
+    url: &str,
+) -> Result<T, AppError> {
+    let resp = client.get(url).send().await?;
+    if !resp.status().is_success() {
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::ApiError {
+            status,
+            url: url.to_string(),
+            body,
+        });
+    }
+    Ok(resp.json::<T>().await?)
+}
+
 // ─── コンテスト取得 ─────────────────────────────────────────────────
 
 pub async fn fetch_contest(
@@ -78,30 +99,18 @@ pub async fn fetch_contest(
     let contest_id = extract_contest_id(url)?;
     let api_url = format!("{API_BASE}/contest/id/{contest_id}");
 
-    let contest: ApiContest = client
-        .get(&api_url)
-        .send()
-        .await?
-        .json()
-        .await?;
+    let contest: ApiContest = api_get(client, &api_url).await?;
 
     // 各問題の情報を取得してタスク一覧を構築
     let mut tasks = Vec::new();
     for problem_id in &contest.problem_id_list {
         let prob_url = format!("{API_BASE}/problems/{problem_id}");
-        if let Ok(problem) = client
-            .get(&prob_url)
-            .send()
-            .await?
-            .json::<ApiProblem>()
-            .await
-        {
-            tasks.push(TaskMeta {
-                id: problem.no.to_string(),
-                name: problem.title.clone(),
-                url: format!("{BASE}/problems/no/{}", problem.no),
-            });
-        }
+        let problem: ApiProblem = api_get(client, &prob_url).await?;
+        tasks.push(TaskMeta {
+            id: problem.no.to_string(),
+            name: problem.title.clone(),
+            url: format!("{BASE}/problems/no/{}", problem.no),
+        });
     }
 
     Ok(ContestMeta {
@@ -136,12 +145,17 @@ pub async fn fetch_samples(
     let problem_no = extract_problem_no(url)?;
     let page_url = format!("{BASE}/problems/no/{problem_no}");
 
-    let html = client
-        .get(&page_url)
-        .send()
-        .await?
-        .text()
-        .await?;
+    let resp = client.get(&page_url).send().await?;
+    if !resp.status().is_success() {
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(AppError::ApiError {
+            status,
+            url: page_url,
+            body,
+        });
+    }
+    let html = resp.text().await?;
 
     parse_samples(&html).map_err(AppError::SampleParse)
 }

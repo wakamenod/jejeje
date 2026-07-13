@@ -185,7 +185,10 @@ je prepare https://atcoder.jp/contests/abc001
   - `div.sample > pre` からサンプル入出力を抽出（`pre[0]`=入力、`pre[1]`=出力）
 - [x] `fetch_contest`: `/api/v1/contest/id/{id}` のレスポンスからタスク一覧を組み立て
   - `ProblemIdList` の各 ID に対して個別に問題情報を取得する処理
-- [ ] API エラーレスポンスのハンドリング
+- [x] API エラーレスポンスのハンドリング
+  - `AppError::ApiError { status, url, body }` バリアントを追加
+  - `fetch_contest` (コンテスト・問題取得) と `fetch_samples` (HTML 取得) で
+    HTTP 非成功ステータス時に `ApiError` を返す `api_get()` ヘルパーを導入
 
 #### AOJ API 実装 (`src/judge/aoj.rs`)
 

@@ -21,6 +21,14 @@ pub enum AppError {
     #[error("Unsupported URL: {0}")]
     UnsupportedUrl(String),
 
+    /// API が非成功ステータスを返した
+    #[error("API error {status} for {url}: {body}")]
+    ApiError {
+        status: u16,
+        url: String,
+        body: String,
+    },
+
     /// 問題ページからサンプルが取得できなかった
     #[error("Failed to parse samples: {0}")]
     SampleParse(String),
@@ -63,6 +71,19 @@ mod tests {
     fn config_dir_not_found_display() {
         let err = AppError::ConfigDirNotFound;
         assert_eq!(err.to_string(), "Could not determine config directory");
+    }
+
+    #[test]
+    fn api_error_display() {
+        let err = AppError::ApiError {
+            status: 404,
+            url: "https://yukicoder.me/api/v1/contest/id/9999".to_string(),
+            body: "Not Found".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "API error 404 for https://yukicoder.me/api/v1/contest/id/9999: Not Found"
+        );
     }
 
     #[test]
