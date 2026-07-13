@@ -232,7 +232,7 @@ fn parse_task_table(html: &str, contest_id: &str) -> Result<Vec<TaskMeta>, AppEr
 /// AtCoder の問題ページでは `<section>` の `<h3>` タグに
 /// "入力例" / "出力例" または "Sample Input" / "Sample Output" が含まれる。
 ///
-/// # HTML 構造
+/// # HTML 構造（新形式: abc188 以降）
 /// ```html
 /// <section>
 ///   <h3>入力例 1</h3>
@@ -242,6 +242,16 @@ fn parse_task_table(html: &str, contest_id: &str) -> Result<Vec<TaskMeta>, AppEr
 ///   <h3>出力例 1</h3>
 ///   <pre>8</pre>
 /// </section>
+/// ```
+///
+/// # HTML 構造（旧形式: abc001 前後）
+/// ```html
+/// <div class="part">
+///   <h3>入力例 1</h3>
+///   <section>
+///     <pre class="prettyprint linenums">3 5</pre>
+///   </section>
+/// </div>
 /// ```
 ///
 /// `<pre><code>...</code></pre>` のネスト構造にも対応する。
@@ -254,6 +264,7 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
     let mut inputs: Vec<String> = Vec::new();
     let mut outputs: Vec<String> = Vec::new();
 
+    // ── 新形式: <section> の中に <h3> と <pre> が同居 ──────────────
     for section in doc.select(&section_sel) {
         let heading = section
             .select(&h3_sel)
@@ -272,6 +283,33 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
             inputs.push(pre_text);
         } else if heading.contains("出力例") || heading.contains("Sample Output") {
             outputs.push(pre_text);
+        }
+    }
+
+    // ── 旧形式フォールバック: <div class="part"> 直下に <h3>、兄弟 <section> に <pre> ──
+    if inputs.is_empty() {
+        let part_sel = Selector::parse("div.part").unwrap();
+
+        for part in doc.select(&part_sel) {
+            // <div class="part"> の直接の子 <h3> からヘッダーを取得
+            let heading = part
+                .select(&h3_sel)
+                .next()
+                .map(|h| h.text().collect::<String>())
+                .unwrap_or_default();
+
+            // <div class="part"> 配下の <section> 内 <pre> からコンテンツを取得
+            let pre_text = part
+                .select(&pre_sel)
+                .next()
+                .map(|p| normalize_pre_text(p.text().collect::<String>()))
+                .unwrap_or_default();
+
+            if heading.contains("入力例") || heading.contains("Sample Input") {
+                inputs.push(pre_text);
+            } else if heading.contains("出力例") || heading.contains("Sample Output") {
+                outputs.push(pre_text);
+            }
         }
     }
 
@@ -761,6 +799,87 @@ mod tests {
         assert_eq!(samples[0].output.trim(), "2");
         assert_eq!(samples[1].input.trim(), "3");
         assert_eq!(samples[1].output.trim(), "4");
+    }
+
+    // ─── 旧形式 (div.part) ─────────────────────────────────────
+
+    #[test]
+    fn parse_samples_legacy_div_part_structure() {
+        // abc001 など旧ページ: <h3> が <div class="part"> の直下にあり、
+        // <section> の兄弟になっている構造
+        let html = r#"
+<html><body>
+  <div class="part">
+    <h3>入力例 1</h3>
+    <section>
+      <pre class="prettyprint linenums">15
+10</pre>
+    </section>
+  </div>
+  <div class="part">
+    <h3>出力例 1</h3>
+    <section>
+      <pre class="prettyprint linenums">1</pre>
+    </section>
+  </div>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].input, "15\n10\n");
+        assert_eq!(samples[0].output, "1\n");
+    }
+
+    #[test]
+    fn parse_samples_legacy_multiple_cases() {
+        // 旧形式で複数サンプル
+        let html = r#"
+<html><body>
+  <div class="part">
+    <h3>入力例 1</h3>
+    <section><pre class="prettyprint linenums">3 5</pre></section>
+  </div>
+  <div class="part">
+    <h3>出力例 1</h3>
+    <section><pre class="prettyprint linenums">8</pre></section>
+  </div>
+  <div class="part">
+    <h3>入力例 2</h3>
+    <section><pre class="prettyprint linenums">10 20</pre></section>
+  </div>
+  <div class="part">
+    <h3>出力例 2</h3>
+    <section><pre class="prettyprint linenums">30</pre></section>
+  </div>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 2);
+        assert_eq!(samples[0].input.trim(), "3 5");
+        assert_eq!(samples[0].output.trim(), "8");
+        assert_eq!(samples[1].input.trim(), "10 20");
+        assert_eq!(samples[1].output.trim(), "30");
+    }
+
+    #[test]
+    fn parse_samples_legacy_english_labels() {
+        // 旧形式で英語ラベル
+        let html = r#"
+<html><body>
+  <div class="part">
+    <h3>Sample Input 1</h3>
+    <section><pre class="prettyprint linenums">1 2 3</pre></section>
+  </div>
+  <div class="part">
+    <h3>Sample Output 1</h3>
+    <section><pre class="prettyprint linenums">6</pre></section>
+  </div>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].input.trim(), "1 2 3");
+        assert_eq!(samples[0].output.trim(), "6");
     }
 
     // ─── normalize_pre_text ─────────────────────────────────────
