@@ -5,7 +5,12 @@
 //! # API エンドポイント
 //! - サンプル一括取得: `GET https://judgedat.u-aizu.ac.jp/testcases/samples/{problem_id}`
 //!   レスポンス: `[{"problemId": "...", "serial": N, "in": "...", "out": "..."}, ...]`
-//! - コース問題一覧:   `GET https://judgeapi.u-aizu.ac.jp/courses/filter?id={course_id}`
+//! - コース一覧:       `GET https://judgeapi.u-aizu.ac.jp/courses`
+//!   レスポンス: `{"courses": [{"id": N, "shortName": "ITP1", "name": "...", ...}, ...]}`
+//! - トピック一覧:     `GET https://judgeapi.u-aizu.ac.jp/courses/{course_id}/topics`
+//!   レスポンス: `{"_embedded": {"topics": [{"_links": {"self": {"href": ".../topics/{id}"}}, ...}, ...]}}`
+//! - トピック問題一覧: `GET https://judgeapi.u-aizu.ac.jp/topics/{topic_id}/problems`
+//!   レスポンス: `{"_embedded": {"problems": [{"name": "...", "_links": {"self": {"href": ".../problems/{problem_id}"}}, ...}, ...]}}`
 //!
 //! # URL パターン
 //! - 問題: `https://onlinejudge.u-aizu.ac.jp/problems/{problem_id}`
@@ -46,59 +51,171 @@ struct ApiSample {
     output: String,
 }
 
+/// `GET /courses` のレスポンス
 #[derive(Debug, Deserialize)]
+struct ApiCoursesResponse {
+    courses: Vec<ApiCourse>,
+}
+
+/// コース一覧の各エントリ
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ApiCourse {
-    id: String,
+    id: u64,
+    short_name: String,
     name: String,
-    problems: Option<Vec<ApiCourseProblem>>,
+}
+
+/// `GET /courses/{id}/topics` の `_embedded.topics[]` 要素
+#[derive(Debug, Deserialize)]
+struct ApiTopic {
+    #[serde(rename = "_links")]
+    links: ApiLinks,
+}
+
+/// `GET /topics/{id}/problems` の `_embedded.problems[]` 要素
+#[derive(Debug, Deserialize)]
+struct ApiTopicProblem {
+    name: String,
+    #[serde(rename = "_links")]
+    links: ApiLinks,
+}
+
+/// HAL スタイルの `_links` オブジェクト（`self.href` のみ利用）
+#[derive(Debug, Deserialize)]
+struct ApiLinks {
+    #[serde(rename = "self")]
+    self_link: ApiHref,
 }
 
 #[derive(Debug, Deserialize)]
-struct ApiCourseProblem {
-    id: String,
-    name: Option<String>,
+struct ApiHref {
+    href: String,
+}
+
+/// `GET /courses/{id}/topics` のレスポンス（HAL 形式）
+#[derive(Debug, Deserialize)]
+struct ApiTopicsResponse {
+    #[serde(rename = "_embedded")]
+    embedded: ApiTopicsEmbedded,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiTopicsEmbedded {
+    topics: Vec<ApiTopic>,
+}
+
+/// `GET /topics/{id}/problems` のレスポンス（HAL 形式）
+#[derive(Debug, Deserialize)]
+struct ApiTopicProblemsResponse {
+    #[serde(rename = "_embedded")]
+    embedded: ApiTopicProblemsEmbedded,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiTopicProblemsEmbedded {
+    problems: Vec<ApiTopicProblem>,
 }
 
 // ─── コンテスト取得（コース対応）───────────────────────────────────
 
 /// AOJ のコース URL からタスク一覧を取得する。
 /// 通常の「コンテスト」には非対応。
+///
+/// # 手順
+/// 1. `GET /courses` でコース一覧を取得し、URL から抽出した `shortName` に一致するコースを探す。
+/// 2. `GET /courses/{courseId}/topics` でトピック一覧を取得し、
+///    各トピックの `_links.self.href` 末尾からトピック数値 ID を抽出する。
+/// 3. 各トピックに対して `GET /topics/{topicId}/problems` で問題一覧を取得し、
+///    `_links.self.href` 末尾から問題 ID 文字列・`name` を得る。
 pub async fn fetch_contest(
     url: &str,
     client: &reqwest::Client,
 ) -> Result<ContestMeta, AppError> {
-    let course_id = extract_course_id(url)?;
-    let api_url = format!("{JUDGE_API}/courses/filter?id={course_id}");
+    let short_name = extract_course_id(url)?;
 
-    let courses: Vec<ApiCourse> = client
-        .get(&api_url)
+    // ── Step 1: コース一覧から shortName に一致するコースを探す ──
+    let courses_url = format!("{JUDGE_API}/courses");
+    let courses_resp: ApiCoursesResponse = client
+        .get(&courses_url)
+        .send()
+        .await?
+        .json()
+        .await
+        .map_err(|_| AppError::SampleParse("Failed to fetch AOJ courses list".to_string()))?;
+
+    let course = courses_resp
+        .courses
+        .into_iter()
+        .find(|c| c.short_name.eq_ignore_ascii_case(&short_name))
+        .ok_or_else(|| {
+            AppError::SampleParse(format!("AOJ course '{short_name}' not found"))
+        })?;
+
+    // ── Step 2: コースのトピック一覧を取得 ──
+    let topics_url = format!("{JUDGE_API}/courses/{}/topics", course.id);
+    let topics_resp: ApiTopicsResponse = client
+        .get(&topics_url)
         .send()
         .await?
         .json()
         .await
         .map_err(|_| {
-            AppError::SampleParse(format!("Failed to fetch AOJ course '{course_id}'"))
+            AppError::SampleParse(format!(
+                "Failed to fetch topics for AOJ course '{}'",
+                course.short_name
+            ))
         })?;
 
-    let course = courses
-        .into_iter()
-        .next()
-        .ok_or_else(|| AppError::SampleParse(format!("AOJ course '{course_id}' not found")))?;
+    // ── Step 3: 各トピックの問題を収集 ──
+    let mut tasks: Vec<TaskMeta> = Vec::new();
+    for topic in topics_resp.embedded.topics {
+        // `_links.self.href` 末尾のセグメントがトピック数値 ID
+        let topic_id = topic
+            .links
+            .self_link
+            .href
+            .trim_end_matches('/')
+            .rsplit('/')
+            .next()
+            .unwrap_or("")
+            .to_string();
 
-    let tasks = course
-        .problems
-        .unwrap_or_default()
-        .into_iter()
-        .map(|p| TaskMeta {
-            id: p.id.clone(),
-            name: p.name.unwrap_or_else(|| p.id.clone()),
-            url: format!("https://onlinejudge.u-aizu.ac.jp/problems/{}", p.id),
-        })
-        .collect();
+        let problems_url = format!("{JUDGE_API}/topics/{topic_id}/problems");
+        let problems_resp: ApiTopicProblemsResponse = match client
+            .get(&problems_url)
+            .send()
+            .await?
+            .json()
+            .await
+        {
+            Ok(r) => r,
+            Err(_) => continue, // トピックの問題取得に失敗しても続行
+        };
+
+        for problem in problems_resp.embedded.problems {
+            // `_links.self.href` 末尾のセグメントが問題 ID 文字列（例: "ITP1_1_A"）
+            let problem_id = problem
+                .links
+                .self_link
+                .href
+                .trim_end_matches('/')
+                .rsplit('/')
+                .next()
+                .unwrap_or("")
+                .to_string();
+
+            tasks.push(TaskMeta {
+                id: problem_id.clone(),
+                name: problem.name,
+                url: format!("https://onlinejudge.u-aizu.ac.jp/problems/{problem_id}"),
+            });
+        }
+    }
 
     Ok(ContestMeta {
         judge: "aoj".to_string(),
-        contest_id: course.id.clone(),
+        contest_id: course.short_name.clone(),
         contest_name: course.name,
         url: url.to_string(),
         tasks,

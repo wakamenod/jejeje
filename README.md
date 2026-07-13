@@ -197,8 +197,11 @@ je prepare https://atcoder.jp/contests/abc001
   - `/problems/{id}` でサンプル数を事前取得するロジックを廃止
   - レスポンスは配列形式 `[{"problemId": "...", "serial": N, "in": "...", "out": "..."}, ...]`
   - `ApiSample` のフィールド名を `input`/`output` → `in`/`out`（serde rename）に修正
-- [ ] `fetch_contest`: コース API のレスポンス形式を確認・修正
-  - `ApiCourse.problems` フィールドの構造を実 API に合わせる
+- [x] `fetch_contest`: コース API のレスポンス形式を確認・修正
+  - `GET /courses` でコース一覧を取得し `shortName` でフィルタ → 数値 `courseId` を取得
+  - `GET /courses/{courseId}/topics` (HAL 形式) で `_embedded.topics[]` を取得
+  - `GET /topics/{topicId}/problems` (HAL 形式) で `_embedded.problems[]` を取得
+  - 問題 ID / トピック ID は `_links.self.href` の末尾セグメントから抽出
 - [ ] Volume URL への対応（`/volumes/{vol_no}` 形式）
 
 ---
