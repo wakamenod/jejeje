@@ -14,6 +14,11 @@
 use super::model::{ContestMeta, SampleCase, TaskMeta};
 use crate::error::AppError;
 use scraper::{Html, Selector};
+use std::time::Duration;
+use tokio::time::sleep;
+
+/// AtCoder へのリクエスト間の待機時間（過負荷防止）。
+const REQUEST_INTERVAL: Duration = Duration::from_secs(1);
 
 const BASE: &str = "https://atcoder.jp";
 
@@ -27,20 +32,27 @@ pub fn is_url(url: &str) -> bool {
     url.contains("atcoder.jp/contests/") || is_legacy_url(url)
 }
 
-/// コンテスト URL（タスク URL ではない）なら `true`。
-///
-/// 例 (現行): `https://atcoder.jp/contests/abc001`
-/// 例 (旧形式): `https://abc001.contest.atcoder.jp/`
-pub fn is_contest_url(url: &str) -> bool {
-    is_url(url) && !url.contains("/tasks")
-}
-
 /// 問題 URL なら `true`。
+///
+/// `/tasks/` の後ろにタスク ID が続く場合のみ問題 URL と判定する。
+/// `/contests/abc001/tasks`（一覧ページ）は問題 URL ではない。
 ///
 /// 例 (現行): `https://atcoder.jp/contests/abc001/tasks/abc001_a`
 /// 例 (旧形式): `https://abc001.contest.atcoder.jp/tasks/abc001_a`
 pub fn is_problem_url(url: &str) -> bool {
     is_url(url) && url.contains("/tasks/")
+}
+
+/// コンテスト URL（タスク URL ではない）なら `true`。
+///
+/// 問題 URL（`/tasks/` の後ろにタスク ID あり）でなければコンテスト URL と見なす。
+/// これにより `/contests/abc001/tasks`（タスク一覧）もコンテスト URL として扱われる。
+///
+/// 例 (現行): `https://atcoder.jp/contests/abc001`
+/// 例 (一覧): `https://atcoder.jp/contests/abc001/tasks`  ← コンテスト URL として扱う
+/// 例 (旧形式): `https://abc001.contest.atcoder.jp/`
+pub fn is_contest_url(url: &str) -> bool {
+    is_url(url) && !is_problem_url(url)
 }
 
 /// 旧サブドメイン形式 (`{id}.contest.atcoder.jp`) の URL なら `true`。
@@ -142,11 +154,22 @@ pub async fn fetch_samples(
 
 /// タスク一覧テーブルをパースして `Vec<TaskMeta>` を返す。
 ///
-/// AtCoder のタスクテーブルは `#task-table` に含まれており、
-/// 各行の 1 列目がアルファベット、2 列目がタスク名とリンク。
+/// AtCoder のタスクテーブルは `table.table tbody` に含まれており、
+/// 各行の構造は以下のとおり：
+///
+/// ```html
+/// <tr>
+///   <td class="text-center no-break"><a href="/contests/{id}/tasks/{task_id}">A</a></td>
+///   <td><a href="/contests/{id}/tasks/{task_id}">Task Name</a></td>
+///   <td>2 sec</td>
+///   <td>1024 MiB</td>
+/// </tr>
+/// ```
+///
+/// 1 列目の `<a>` からアルファベット ID と URL、2 列目の `<a>` からタスク名を取得する。
 fn parse_task_table(html: &str, contest_id: &str) -> Result<Vec<TaskMeta>, AppError> {
     let doc = Html::parse_document(html);
-    let row_sel = Selector::parse("#task-table tbody tr").unwrap();
+    let row_sel = Selector::parse("table.table tbody tr").unwrap();
     let td_sel = Selector::parse("td").unwrap();
     let a_sel = Selector::parse("a").unwrap();
 
@@ -158,14 +181,29 @@ fn parse_task_table(html: &str, contest_id: &str) -> Result<Vec<TaskMeta>, AppEr
             continue;
         }
 
-        let id = cols[0].text().collect::<String>().trim().to_lowercase();
-        let name_cell = &cols[1];
-        let name = name_cell.text().collect::<String>().trim().to_string();
-        let href = name_cell
-            .select(&a_sel)
-            .next()
+        // 1 列目: <a>A</a> — アルファベット ID と問題 URL
+        let id_cell = &cols[0];
+        let id_anchor = id_cell.select(&a_sel).next();
+        let id = id_anchor
+            .map(|a| a.text().collect::<String>().trim().to_lowercase())
+            .unwrap_or_else(|| id_cell.text().collect::<String>().trim().to_lowercase());
+        let href = id_anchor
             .and_then(|a| a.value().attr("href"))
+            // フォールバック: 2 列目の <a> から URL を取る
+            .or_else(|| {
+                cols[1]
+                    .select(&a_sel)
+                    .next()
+                    .and_then(|a| a.value().attr("href"))
+            })
             .unwrap_or("");
+
+        // 2 列目: タスク名
+        let name = cols[1].text().collect::<String>().trim().to_string();
+
+        if id.is_empty() || href.is_empty() {
+            continue;
+        }
 
         let task_url = if href.starts_with("http") {
             href.to_string()
@@ -300,7 +338,12 @@ fn extract_contest_id(url: &str) -> Result<String, AppError> {
         .ok_or_else(|| AppError::UnsupportedUrl(url.to_string()))
 }
 
+/// URL から HTML を取得する。
+///
+/// リクエスト前に [`REQUEST_INTERVAL`] だけ待機し、AtCoder サーバーへの
+/// 過負荷を防ぐ。
 async fn fetch_html(url: &str, client: &reqwest::Client) -> Result<String, AppError> {
+    sleep(REQUEST_INTERVAL).await;
     let resp = client.get(url).send().await?;
     Ok(resp.text().await?)
 }
@@ -341,6 +384,14 @@ mod tests {
     }
 
     #[test]
+    fn is_contest_url_true_for_tasks_list() {
+        // /tasks 末尾（タスク一覧ページ）はコンテスト URL として扱う
+        assert!(is_contest_url(
+            "https://atcoder.jp/contests/abc001/tasks"
+        ));
+    }
+
+    #[test]
     fn is_problem_url_true() {
         assert!(is_problem_url(
             "https://atcoder.jp/contests/abc001/tasks/abc001_a"
@@ -350,6 +401,14 @@ mod tests {
     #[test]
     fn is_problem_url_false_for_contest() {
         assert!(!is_problem_url("https://atcoder.jp/contests/abc001"));
+    }
+
+    #[test]
+    fn is_problem_url_false_for_tasks_list() {
+        // /tasks 末尾はタスク一覧ページなので問題 URL ではない
+        assert!(!is_problem_url(
+            "https://atcoder.jp/contests/abc001/tasks"
+        ));
     }
 
     // ─── URL 判定（旧サブドメイン形式） ──────────────────────────
@@ -504,16 +563,21 @@ mod tests {
 
     #[test]
     fn parse_task_table_basic() {
+        // 実際の AtCoder HTML 構造: 1 列目の <a> に ID と URL、2 列目にタスク名
         let html = r#"
-<table id="task-table">
+<table class="table table-bordered table-striped">
   <tbody>
     <tr>
-      <td>A</td>
+      <td class="text-center no-break"><a href="/contests/abc001/tasks/abc001_a">A</a></td>
       <td><a href="/contests/abc001/tasks/abc001_a">Two Sum</a></td>
+      <td class="text-right">2 sec</td>
+      <td class="text-right">1024 MiB</td>
     </tr>
     <tr>
-      <td>B</td>
+      <td class="text-center no-break"><a href="/contests/abc001/tasks/abc001_b">B</a></td>
       <td><a href="/contests/abc001/tasks/abc001_b">Difference</a></td>
+      <td class="text-right">2 sec</td>
+      <td class="text-right">1024 MiB</td>
     </tr>
   </tbody>
 </table>
@@ -530,11 +594,13 @@ mod tests {
     #[test]
     fn parse_task_table_absolute_href() {
         let html = r#"
-<table id="task-table">
+<table class="table table-bordered table-striped">
   <tbody>
     <tr>
-      <td>A</td>
+      <td class="text-center no-break"><a href="https://atcoder.jp/contests/abc001/tasks/abc001_a">A</a></td>
       <td><a href="https://atcoder.jp/contests/abc001/tasks/abc001_a">A problem</a></td>
+      <td class="text-right">2 sec</td>
+      <td class="text-right">1024 MiB</td>
     </tr>
   </tbody>
 </table>
