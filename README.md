@@ -45,7 +45,7 @@ je prepare https://atcoder.jp/contests/abc001
 je prepare https://atcoder.jp/contests/abc001/tasks/abc001_a
 ```
 
-> **サンプルの再取得について**
+> **再実行について**
 > 既存のタスクディレクトリに対して再度 `prepare` を実行すると、
 > サンプルファイル (`test/*.in` / `test/*.out`) は常に最新に更新されます。
 > テンプレートファイルはすでに存在する場合はスキップされるため、
@@ -105,7 +105,6 @@ je config test_directory
 # 設定値を変更
 je config test_directory tests
 je config template_dir ~/.config/je/templates
-je config default_template cpp
 ```
 
 #### 設定項目一覧
@@ -115,25 +114,23 @@ je config default_template cpp
 | `contest_directory` | `{contest_id}` | コンテストディレクトリ名 |
 | `task_directory` | `{task_id}` | タスクディレクトリ名 |
 | `test_directory` | `test` | サンプルケース格納ディレクトリ名 |
-| `default_template` | (なし) | デフォルトのテンプレート名 |
 | `template_dir` | (なし) | テンプレートファイルの格納ディレクトリ |
 
 ### テンプレート機能
 
-`template_dir` 以下にディレクトリを作成し、その中にファイルを置くと `prepare` 実行時にタスクディレクトリへコピーされます。
+`template_dir` に直接ファイルを置くと、`prepare` 実行時にそのディレクトリ内のファイルが全てタスクディレクトリへコピーされます。
 ファイルがすでに存在する場合はスキップされるため、回答中のコードが上書きされることはありません。
 
 ```
 ~/.config/je/templates/
-└── cpp/
-    └── main.cpp   ← タスクディレクトリにコピーされる（既存の場合はスキップ）
+├── main.cpp   ┐
+└── main.rs    ┘ タスクディレクトリへ全てコピーされる（既存の場合はスキップ）
 ```
 
 ```bash
 je config template_dir ~/.config/je/templates
-je config default_template cpp
 je prepare https://atcoder.jp/contests/abc001
-# → abc001/a/main.cpp, abc001/b/main.cpp ... が自動配置される
+# → abc001/a/main.cpp, abc001/a/main.rs, abc001/b/main.cpp ... が自動配置される
 ```
 
 ## 開発・テスト

@@ -9,7 +9,7 @@ use std::{fs, path::Path};
 ///
 /// サンプルファイル (test/*.in / test/*.out) は常に最新に更新する。
 /// テンプレートファイルはコピー先が存在する場合はスキップする（回答中のファイルを保護）。
-pub async fn run(url: String, template: Option<String>) -> Result<()> {
+pub async fn run(url: String) -> Result<()> {
     let config = Config::load()?;
     let client = build_client()?;
 
@@ -31,7 +31,7 @@ pub async fn run(url: String, template: Option<String>) -> Result<()> {
 
         for task in &contest_meta.tasks {
             let task_dir = contest_dir.join(&task.id);
-            setup_task_dir(&task_dir, &task.url, &config, &client, &template).await?;
+            setup_task_dir(&task_dir, &task.url, &config, &client).await?;
             println!("  [{}] {} — {}", task.id, task.name, task_dir.display());
         }
     } else {
@@ -43,7 +43,7 @@ pub async fn run(url: String, template: Option<String>) -> Result<()> {
         let task_dir = base_dir.join(&task_id);
 
         println!("Preparing task '{task_id}'...");
-        setup_task_dir(&task_dir, &url, &config, &client, &template)
+        setup_task_dir(&task_dir, &url, &config, &client)
             .await
             .with_context(|| format!("Failed to prepare task directory '{}'", task_dir.display()))?;
 
@@ -56,13 +56,13 @@ pub async fn run(url: String, template: Option<String>) -> Result<()> {
 /// タスクディレクトリをセットアップする。
 ///
 /// - `test/` ディレクトリを作成し、サンプルファイルを常に上書きする
-/// - テンプレートファイルはコピー先が存在しない場合のみコピーする
+/// - `template_dir` が設定されている場合、その直下のファイルを全てコピーする
+///   （コピー先が既に存在するファイルはスキップする）
 pub async fn setup_task_dir(
     task_dir: &Path,
     problem_url: &str,
     config: &Config,
     client: &reqwest::Client,
-    template: &Option<String>,
 ) -> Result<()> {
     let test_dir = task_dir.join(&config.test_directory);
     fs::create_dir_all(&test_dir)?;
@@ -78,31 +78,22 @@ pub async fn setup_task_dir(
         fs::write(test_dir.join(format!("{n}.out")), &sample.output)?;
     }
 
-    // テンプレートは既存ファイルを上書きしない
-    let tmpl_name = template.as_ref().or(config.default_template.as_ref());
-    if let Some(name) = tmpl_name {
-        copy_template_safe(task_dir, name, config)?;
+    // template_dir 直下のファイルを全てコピーする（既存ファイルはスキップ）
+    if let Some(dir) = &config.template_dir {
+        copy_template_all(task_dir, dir)?;
     }
 
     Ok(())
 }
 
-/// テンプレートディレクトリの内容をタスクディレクトリへコピーする。
-/// コピー先のファイルがすでに存在する場合はスキップする。
-fn copy_template_safe(task_dir: &Path, template_name: &str, config: &Config) -> Result<()> {
-    let template_base = match &config.template_dir {
-        Some(dir) => Path::new(dir).to_path_buf(),
-        None => return Ok(()), // template_dir 未設定
-    };
-    let template_dir = template_base.join(template_name);
-    if !template_dir.exists() {
-        anyhow::bail!(
-            "Template '{}' not found at {}",
-            template_name,
-            template_dir.display()
-        );
+/// `template_dir` 直下のファイルをタスクディレクトリへ全てコピーする。
+/// コピー先のファイルがすでに存在する場合はスキップする（回答中のコードを保護）。
+fn copy_template_all(task_dir: &Path, template_dir: &str) -> Result<()> {
+    let src = Path::new(template_dir);
+    if !src.exists() {
+        anyhow::bail!("template_dir '{}' not found", template_dir);
     }
-    for entry in fs::read_dir(&template_dir)? {
+    for entry in fs::read_dir(src)? {
         let entry = entry?;
         if entry.file_type()?.is_file() {
             let dest = task_dir.join(entry.file_name());
@@ -146,6 +137,71 @@ pub fn build_client() -> Result<reqwest::Client> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    // ─── copy_template_all ────────────────────────────────────────
+
+    #[test]
+    fn copy_template_all_copies_files() {
+        let template_dir = tempdir().unwrap();
+        let task_dir = tempdir().unwrap();
+
+        fs::write(template_dir.path().join("main.rs"), "fn main() {}").unwrap();
+
+        copy_template_all(task_dir.path(), template_dir.path().to_str().unwrap()).unwrap();
+
+        let dest = task_dir.path().join("main.rs");
+        assert!(dest.exists());
+        assert_eq!(fs::read_to_string(dest).unwrap(), "fn main() {}");
+    }
+
+    #[test]
+    fn copy_template_all_does_not_overwrite_existing_file() {
+        let template_dir = tempdir().unwrap();
+        let task_dir = tempdir().unwrap();
+
+        fs::write(template_dir.path().join("main.rs"), "template content").unwrap();
+        // タスクディレクトリにすでに同名ファイルが存在する
+        fs::write(task_dir.path().join("main.rs"), "my solution").unwrap();
+
+        copy_template_all(task_dir.path(), template_dir.path().to_str().unwrap()).unwrap();
+
+        // 既存ファイルが上書きされていないことを確認
+        let content = fs::read_to_string(task_dir.path().join("main.rs")).unwrap();
+        assert_eq!(content, "my solution");
+    }
+
+    #[test]
+    fn copy_template_all_copies_new_files_and_skips_existing() {
+        let template_dir = tempdir().unwrap();
+        let task_dir = tempdir().unwrap();
+
+        fs::write(template_dir.path().join("main.rs"), "template main").unwrap();
+        fs::write(template_dir.path().join("Cargo.toml"), "[package]").unwrap();
+        // main.rs だけ既存
+        fs::write(task_dir.path().join("main.rs"), "my solution").unwrap();
+
+        copy_template_all(task_dir.path(), template_dir.path().to_str().unwrap()).unwrap();
+
+        // main.rs は上書きされない
+        assert_eq!(
+            fs::read_to_string(task_dir.path().join("main.rs")).unwrap(),
+            "my solution"
+        );
+        // Cargo.toml は新規コピーされる
+        assert_eq!(
+            fs::read_to_string(task_dir.path().join("Cargo.toml")).unwrap(),
+            "[package]"
+        );
+    }
+
+    #[test]
+    fn copy_template_all_returns_error_when_template_dir_missing() {
+        let task_dir = tempdir().unwrap();
+        let result = copy_template_all(task_dir.path(), "/nonexistent/template/dir");
+        assert!(result.is_err());
+    }
 
     #[test]
     fn infer_task_id_atcoder() {

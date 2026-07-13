@@ -27,10 +27,6 @@ File handling:
     Prepare {
         /// Contest URL or problem URL
         url: String,
-
-        /// Template name to copy into each task directory
-        #[arg(short, long)]
-        template: Option<String>,
     },
 
     /// Run sample test cases against your solution and report AC / WA / TLE / RE.

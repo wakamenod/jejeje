@@ -14,7 +14,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Prepare { url, template } => commands::prepare::run(url, template).await?,
+        Commands::Prepare { url } => commands::prepare::run(url).await?,
         Commands::Test {
             command,
             tle,

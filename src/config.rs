@@ -22,11 +22,7 @@ pub struct Config {
     #[serde(default = "default_test_directory")]
     pub test_directory: String,
 
-    /// Default template name applied when none is specified on the command line
-    #[serde(default)]
-    pub default_template: Option<String>,
-
-    /// Path to the directory that contains template directories
+    /// Path to the directory whose files are copied into each task directory
     #[serde(default)]
     pub template_dir: Option<String>,
 }
@@ -49,7 +45,6 @@ impl Default for Config {
             contest_directory: default_contest_directory(),
             task_directory: default_task_directory(),
             test_directory: default_test_directory(),
-            default_template: None,
             template_dir: None,
         }
     }
@@ -118,7 +113,6 @@ mod tests {
     #[test]
     fn default_optional_fields_are_none() {
         let config = Config::default();
-        assert!(config.default_template.is_none());
         assert!(config.template_dir.is_none());
     }
 
@@ -132,7 +126,6 @@ mod tests {
         assert_eq!(original.contest_directory, restored.contest_directory);
         assert_eq!(original.task_directory, restored.task_directory);
         assert_eq!(original.test_directory, restored.test_directory);
-        assert_eq!(original.default_template, restored.default_template);
         assert_eq!(original.template_dir, restored.template_dir);
     }
 
@@ -142,7 +135,6 @@ mod tests {
             contest_directory: "contest_{contest_id}".to_string(),
             task_directory: "task_{task_id}".to_string(),
             test_directory: "samples".to_string(),
-            default_template: Some("rust".to_string()),
             template_dir: Some("/home/user/templates".to_string()),
         };
         let toml_str = toml::to_string_pretty(&original).unwrap();
@@ -150,7 +142,6 @@ mod tests {
         assert_eq!(restored.contest_directory, "contest_{contest_id}");
         assert_eq!(restored.task_directory, "task_{task_id}");
         assert_eq!(restored.test_directory, "samples");
-        assert_eq!(restored.default_template, Some("rust".to_string()));
         assert_eq!(restored.template_dir, Some("/home/user/templates".to_string()));
     }
 
@@ -162,7 +153,7 @@ mod tests {
         assert_eq!(config.test_directory, "cases");
         assert_eq!(config.contest_directory, "{contest_id}");
         assert_eq!(config.task_directory, "{task_id}");
-        assert!(config.default_template.is_none());
+        assert!(config.template_dir.is_none());
     }
 
     // ─── save() / load() ─────────────────────────────────────────
@@ -177,8 +168,7 @@ mod tests {
             contest_directory: "my_contest".to_string(),
             task_directory: "my_task".to_string(),
             test_directory: "t".to_string(),
-            default_template: Some("cpp".to_string()),
-            template_dir: None,
+            template_dir: Some("/home/user/templates".to_string()),
         };
 
         // 直接ファイルに書き込む（save() は OS config dir を使うため手動で実施）
@@ -191,7 +181,6 @@ mod tests {
         assert_eq!(loaded.contest_directory, "my_contest");
         assert_eq!(loaded.task_directory, "my_task");
         assert_eq!(loaded.test_directory, "t");
-        assert_eq!(loaded.default_template, Some("cpp".to_string()));
-        assert!(loaded.template_dir.is_none());
+        assert_eq!(loaded.template_dir, Some("/home/user/templates".to_string()));
     }
 }

@@ -18,10 +18,6 @@ pub async fn run(key: Option<String>, value: Option<String>) -> Result<()> {
             println!("task_directory     = {}", config.task_directory);
             println!("test_directory     = {}", config.test_directory);
             println!(
-                "default_template   = {}",
-                config.default_template.as_deref().unwrap_or("(none)")
-            );
-            println!(
                 "template_dir       = {}",
                 config.template_dir.as_deref().unwrap_or("(none)")
             );
@@ -49,10 +45,6 @@ fn get_value(config: &Config, key: &str) -> Result<String> {
         "contest_directory" => Ok(config.contest_directory.clone()),
         "task_directory" => Ok(config.task_directory.clone()),
         "test_directory" => Ok(config.test_directory.clone()),
-        "default_template" => Ok(config
-            .default_template
-            .clone()
-            .unwrap_or_else(|| "(none)".to_string())),
         "template_dir" => Ok(config
             .template_dir
             .clone()
@@ -66,13 +58,6 @@ fn set_value(config: &mut Config, key: &str, value: &str) -> Result<()> {
         "contest_directory" => config.contest_directory = value.to_string(),
         "task_directory" => config.task_directory = value.to_string(),
         "test_directory" => config.test_directory = value.to_string(),
-        "default_template" => {
-            config.default_template = if value == "(none)" || value.is_empty() {
-                None
-            } else {
-                Some(value.to_string())
-            }
-        }
         "template_dir" => {
             config.template_dir = if value == "(none)" || value.is_empty() {
                 None
@@ -112,19 +97,6 @@ mod tests {
     fn get_test_directory() {
         let config = default_config();
         assert_eq!(get_value(&config, "test_directory").unwrap(), "test");
-    }
-
-    #[test]
-    fn get_default_template_none() {
-        let config = default_config();
-        assert_eq!(get_value(&config, "default_template").unwrap(), "(none)");
-    }
-
-    #[test]
-    fn get_default_template_some() {
-        let mut config = default_config();
-        config.default_template = Some("rust".to_string());
-        assert_eq!(get_value(&config, "default_template").unwrap(), "rust");
     }
 
     #[test]
@@ -170,29 +142,6 @@ mod tests {
         let mut config = default_config();
         set_value(&mut config, "test_directory", "samples").unwrap();
         assert_eq!(config.test_directory, "samples");
-    }
-
-    #[test]
-    fn set_default_template_to_value() {
-        let mut config = default_config();
-        set_value(&mut config, "default_template", "cpp").unwrap();
-        assert_eq!(config.default_template, Some("cpp".to_string()));
-    }
-
-    #[test]
-    fn set_default_template_to_none_keyword() {
-        let mut config = default_config();
-        config.default_template = Some("rust".to_string());
-        set_value(&mut config, "default_template", "(none)").unwrap();
-        assert!(config.default_template.is_none());
-    }
-
-    #[test]
-    fn set_default_template_to_empty_string() {
-        let mut config = default_config();
-        config.default_template = Some("rust".to_string());
-        set_value(&mut config, "default_template", "").unwrap();
-        assert!(config.default_template.is_none());
     }
 
     #[test]
