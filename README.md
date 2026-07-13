@@ -192,12 +192,14 @@ je prepare https://atcoder.jp/contests/abc001
 
 #### AOJ API 実装 (`src/judge/aoj.rs`)
 
-- [ ] `fetch_samples`: `judgeapi.u-aizu.ac.jp/samples/{id}/{n}` のレスポンス形式を確認・修正
-  - 現在の `ApiSample` 型の `input` / `output` フィールド名を実 API に合わせる
+- [x] `fetch_samples`: `judgedat.u-aizu.ac.jp/testcases/samples/{id}` で全サンプルを一括取得
+  - エンドポイントホストを `judgeapi` → `judgedat.u-aizu.ac.jp` に修正
+  - `/problems/{id}` でサンプル数を事前取得するロジックを廃止
+  - レスポンスは配列形式 `[{"problemId": "...", "serial": N, "in": "...", "out": "..."}, ...]`
+  - `ApiSample` のフィールド名を `input`/`output` → `in`/`out`（serde rename）に修正
 - [ ] `fetch_contest`: コース API のレスポンス形式を確認・修正
   - `ApiCourse.problems` フィールドの構造を実 API に合わせる
 - [ ] Volume URL への対応（`/volumes/{vol_no}` 形式）
-- [ ] 問題番号から直接サンプル数を取得する処理の改善
 
 ---
 

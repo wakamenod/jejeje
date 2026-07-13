@@ -2,10 +2,10 @@
 //!
 //! AOJ は公式 REST API を提供しているため、スクレイピングではなく API を使用する。
 //!
-//! # API エンドポイント (Arena API v3)
-//! - 問題情報:       `GET https://judgeapi.u-aizu.ac.jp/problems/{problem_id}`
-//! - サンプル:       `GET https://judgeapi.u-aizu.ac.jp/samples/{problem_id}/{sample_index}`
-//! - コース問題一覧: `GET https://judgeapi.u-aizu.ac.jp/courses/filter?id={course_id}`
+//! # API エンドポイント
+//! - サンプル一括取得: `GET https://judgedat.u-aizu.ac.jp/testcases/samples/{problem_id}`
+//!   レスポンス: `[{"problemId": "...", "serial": N, "in": "...", "out": "..."}, ...]`
+//! - コース問題一覧:   `GET https://judgeapi.u-aizu.ac.jp/courses/filter?id={course_id}`
 //!
 //! # URL パターン
 //! - 問題: `https://onlinejudge.u-aizu.ac.jp/problems/{problem_id}`
@@ -20,6 +20,7 @@ use crate::error::AppError;
 use serde::Deserialize;
 
 const JUDGE_API: &str = "https://judgeapi.u-aizu.ac.jp";
+const JUDGE_DAT_API: &str = "https://judgedat.u-aizu.ac.jp";
 
 // ─── URL 判定 ──────────────────────────────────────────────────────
 
@@ -38,16 +39,10 @@ pub fn is_problem_url(url: &str) -> bool {
 // ─── API レスポンス型 ──────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-struct ApiProblem {
-    id: String,
-    name: Option<String>,
-    #[serde(rename = "numberOfSamples")]
-    number_of_samples: Option<u32>,
-}
-
-#[derive(Debug, Deserialize)]
 struct ApiSample {
+    #[serde(rename = "in")]
     input: String,
+    #[serde(rename = "out")]
     output: String,
 }
 
@@ -118,38 +113,27 @@ pub async fn fetch_samples(
 ) -> Result<Vec<SampleCase>, AppError> {
     let problem_id = extract_problem_id(url)?;
 
-    // まず問題情報を取得してサンプル数を確認
-    let prob_url = format!("{JUDGE_API}/problems/{problem_id}");
-    let problem: ApiProblem = client
-        .get(&prob_url)
+    // judgedat API で全サンプルを一括取得
+    // GET https://judgedat.u-aizu.ac.jp/testcases/samples/{problem_id}
+    // → [{"problemId": "...", "serial": N, "in": "...", "out": "..."}, ...]
+    let sample_url = format!("{JUDGE_DAT_API}/testcases/samples/{problem_id}");
+    let raw: Vec<ApiSample> = client
+        .get(&sample_url)
         .send()
         .await?
         .json()
         .await
-        .map_err(|_| AppError::SampleParse(format!("Problem '{problem_id}' not found")))?;
+        .map_err(|_| {
+            AppError::SampleParse(format!("Failed to fetch samples for '{problem_id}'"))
+        })?;
 
-    let n = problem.number_of_samples.unwrap_or(0);
-    if n == 0 {
-        return Ok(Vec::new());
-    }
-
-    // サンプルを 1-indexed で取得
-    let mut samples = Vec::new();
-    for i in 1..=n {
-        let sample_url = format!("{JUDGE_API}/samples/{problem_id}/{i}");
-        if let Ok(s) = client
-            .get(&sample_url)
-            .send()
-            .await?
-            .json::<ApiSample>()
-            .await
-        {
-            samples.push(SampleCase {
-                input: s.input,
-                output: s.output,
-            });
-        }
-    }
+    let samples = raw
+        .into_iter()
+        .map(|s| SampleCase {
+            input: s.input,
+            output: s.output,
+        })
+        .collect();
 
     Ok(samples)
 }
