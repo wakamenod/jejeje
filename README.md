@@ -134,14 +134,14 @@ je config
 je config template_dir
 
 # 設定値を変更
-je config template_dir ~/.config/je/templates
+je config template_dir ~/.config/jejeje/templates
 ```
 
 #### 設定項目一覧
 
 | キー | デフォルト値 | 説明 |
 |---|---|---|
-| `template_dir` | (なし) | テンプレートファイルの格納ディレクトリ |
+| `template_dir` | `~/.config/jejeje/templates` | テンプレートファイルの格納ディレクトリ |
 
 ### テンプレート機能
 
@@ -149,13 +149,12 @@ je config template_dir ~/.config/je/templates
 ファイルがすでに存在する場合はスキップされるため、回答中のコードが上書きされることはありません。
 
 ```
-~/.config/je/templates/
+~/.config/jejeje/templates/
 ├── main.cpp   ┐
 └── main.rs    ┘ タスクディレクトリへ全てコピーされる（既存の場合はスキップ）
 ```
 
 ```bash
-je config template_dir ~/.config/je/templates
 je prepare https://atcoder.jp/contests/abc001
 # → abc001/a/main.cpp, abc001/a/main.rs, abc001/b/main.cpp ... が自動配置される
 ```

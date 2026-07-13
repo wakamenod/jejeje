@@ -73,8 +73,17 @@ mod tests {
     // ─── get_value ───────────────────────────────────────────────
 
     #[test]
-    fn get_template_dir_none() {
+    fn get_template_dir_default() {
         let config = default_config();
+        // デフォルトは ~/.config/jejeje/templates
+        let expected = config.template_dir.clone().unwrap_or_else(|| "(none)".to_string());
+        assert_eq!(get_value(&config, "template_dir").unwrap(), expected);
+    }
+
+    #[test]
+    fn get_template_dir_none_when_explicitly_set_to_none() {
+        let mut config = default_config();
+        config.template_dir = None;
         assert_eq!(get_value(&config, "template_dir").unwrap(), "(none)");
     }
 

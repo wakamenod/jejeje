@@ -3,6 +3,12 @@ use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+fn default_template_dir() -> Option<String> {
+    directories::BaseDirs::new()
+        .map(|b| b.home_dir().join(".config").join("jejeje").join("templates"))
+        .and_then(|p| p.to_str().map(|s| s.to_string()))
+}
+
 /// Global configuration stored at the OS config directory.
 ///
 /// Linux:   ~/.config/je/config.toml
@@ -11,14 +17,14 @@ use std::path::PathBuf;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     /// Path to the directory whose files are copied into each task directory
-    #[serde(default)]
+    #[serde(default = "default_template_dir")]
     pub template_dir: Option<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            template_dir: None,
+            template_dir: default_template_dir(),
         }
     }
 }
@@ -66,9 +72,9 @@ mod tests {
     // ─── デフォルト値 ─────────────────────────────────────────────
 
     #[test]
-    fn default_optional_fields_are_none() {
+    fn default_template_dir_is_home_config_jejeje_templates() {
         let config = Config::default();
-        assert!(config.template_dir.is_none());
+        assert_eq!(config.template_dir, default_template_dir());
     }
 
     // ─── TOML シリアライズ / デシリアライズ ───────────────────────
