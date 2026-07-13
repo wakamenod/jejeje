@@ -1,6 +1,6 @@
 use crate::commands::prepare::build_client;
 use crate::judge::{fetch_contest_list, JudgeKind};
-use owo_colors::OwoColorize;
+use owo_colors::{OwoColorize, Stream};
 
 pub async fn run(judge_str: String, limit: usize) -> anyhow::Result<()> {
     let client = build_client()?;
@@ -12,7 +12,10 @@ pub async fn run(judge_str: String, limit: usize) -> anyhow::Result<()> {
         _ => return Err(anyhow::anyhow!("Unsupported judge: {}", judge_str)),
     };
 
-    println!("Fetching contest list for {}...", judge.as_str().cyan());
+    println!(
+        "Fetching contest list for {}...",
+        judge.as_str().if_supports_color(Stream::Stdout, |s| s.cyan())
+    );
     let mut contests = fetch_contest_list(&judge, &client).await?;
     contests.truncate(limit);
 
@@ -22,7 +25,12 @@ pub async fn run(judge_str: String, limit: usize) -> anyhow::Result<()> {
     }
 
     for c in contests {
-        println!("{} — {} ({})", c.id.green(), c.name, c.url.underline());
+        println!(
+            "{} — {} ({})",
+            c.id.if_supports_color(Stream::Stdout, |s| s.green()),
+            c.name,
+            c.url.if_supports_color(Stream::Stdout, |s| s.underline()),
+        );
     }
 
     Ok(())

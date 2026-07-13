@@ -12,6 +12,7 @@
 //! ```
 
 use assert_cmd::Command;
+use predicates::prelude::PredicateBooleanExt;
 
 // ─── ネットワーク不要テスト ──────────────────────────────────────
 
@@ -60,6 +61,33 @@ fn contests_help_shows_judge_options() {
         .stdout(predicates::str::contains("codeforces"))
         .stdout(predicates::str::contains("yukicoder"))
         .stdout(predicates::str::contains("aoj"));
+}
+
+// ─── NO_COLOR テスト ─────────────────────────────────────────────
+
+/// NO_COLOR=1 を設定しても引数バリデーションが通常どおり動作すること。
+#[test]
+fn contests_no_color_env_does_not_affect_validation() {
+    Command::cargo_bin("je")
+        .expect("je binary not found")
+        .env("NO_COLOR", "1")
+        .args(["contests", "leetcode"])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("invalid value"));
+}
+
+/// NO_COLOR=1 を設定すると stdout に ANSI エスケープシーケンスが含まれないこと。
+#[test]
+#[ignore]
+fn contests_no_color_env_suppresses_ansi() {
+    Command::cargo_bin("je")
+        .expect("je binary not found")
+        .env("NO_COLOR", "1")
+        .args(["contests", "atcoder", "--limit", "3"])
+        .assert()
+        .success()
+        .stdout(predicates::str::contains("\x1b").not());
 }
 
 // ─── ネットワーク必要テスト ──────────────────────────────────────
