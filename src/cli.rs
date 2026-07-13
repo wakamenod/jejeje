@@ -56,7 +56,7 @@ File handling:
     /// With a key only, prints that setting.
     /// With key and value, updates the setting.
     Config {
-        /// Configuration key (e.g. test_directory)
+        /// Configuration key (e.g. template_dir)
         key: Option<String>,
 
         /// Value to set

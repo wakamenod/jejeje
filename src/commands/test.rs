@@ -1,4 +1,3 @@
-use crate::config::Config;
 use anyhow::Result;
 use owo_colors::OwoColorize;
 use std::{
@@ -40,9 +39,8 @@ struct TestOutcome {
 
 /// `je test` — テストケースを実行して AC / WA / TLE / RE を判定する。
 pub async fn run(command: Option<String>, tle: f64, epsilon: Option<f64>) -> Result<()> {
-    let config = Config::load()?;
     let cmd = command.as_deref().unwrap_or("./a.out");
-    let test_dir = Path::new(&config.test_directory);
+    let test_dir = Path::new("test");
 
     if !test_dir.exists() {
         anyhow::bail!(

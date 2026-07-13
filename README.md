@@ -100,10 +100,9 @@ je tasks
 je config
 
 # 設定値を確認
-je config test_directory
+je config template_dir
 
 # 設定値を変更
-je config test_directory tests
 je config template_dir ~/.config/je/templates
 ```
 
@@ -111,9 +110,6 @@ je config template_dir ~/.config/je/templates
 
 | キー | デフォルト値 | 説明 |
 |---|---|---|
-| `contest_directory` | `{contest_id}` | コンテストディレクトリ名 |
-| `task_directory` | `{task_id}` | タスクディレクトリ名 |
-| `test_directory` | `test` | サンプルケース格納ディレクトリ名 |
 | `template_dir` | (なし) | テンプレートファイルの格納ディレクトリ |
 
 ### テンプレート機能
@@ -247,10 +243,6 @@ cargo test --test integration_prepare aoj -- --ignored
 
 #### `je prepare` の改善
 
-- [ ] `contest_directory` / `task_directory` 設定値のプレースホルダー展開
-  - 現状: 設定値 `{contest_id}` がそのままディレクトリ名になっている
-  - 実装: `{contest_id}` → 実際のコンテスト ID に置換する処理を追加
-  - 対応プレースホルダー: `{contest_id}`, `{task_id}`, `{judge}`
 - [ ] コンテスト作成時の進捗表示の改善（タスクごとのダウンロード状況）
 - [ ] すでにディレクトリが存在する場合の上書き確認プロンプト
 - [ ] `--force` フラグによる強制上書きオプション

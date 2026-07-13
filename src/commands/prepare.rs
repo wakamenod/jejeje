@@ -64,7 +64,7 @@ pub async fn setup_task_dir(
     config: &Config,
     client: &reqwest::Client,
 ) -> Result<()> {
-    let test_dir = task_dir.join(&config.test_directory);
+    let test_dir = task_dir.join("test");
     fs::create_dir_all(&test_dir)?;
 
     // サンプルは常に最新に更新する

@@ -14,11 +14,8 @@ pub async fn run(key: Option<String>, value: Option<String>) -> Result<()> {
         (None, _) => {
             println!("Config file: {}", Config::config_path_display());
             println!();
-            println!("contest_directory  = {}", config.contest_directory);
-            println!("task_directory     = {}", config.task_directory);
-            println!("test_directory     = {}", config.test_directory);
             println!(
-                "template_dir       = {}",
+                "template_dir  = {}",
                 config.template_dir.as_deref().unwrap_or("(none)")
             );
         }
@@ -42,9 +39,6 @@ pub async fn run(key: Option<String>, value: Option<String>) -> Result<()> {
 
 fn get_value(config: &Config, key: &str) -> Result<String> {
     match key {
-        "contest_directory" => Ok(config.contest_directory.clone()),
-        "task_directory" => Ok(config.task_directory.clone()),
-        "test_directory" => Ok(config.test_directory.clone()),
         "template_dir" => Ok(config
             .template_dir
             .clone()
@@ -55,9 +49,6 @@ fn get_value(config: &Config, key: &str) -> Result<String> {
 
 fn set_value(config: &mut Config, key: &str, value: &str) -> Result<()> {
     match key {
-        "contest_directory" => config.contest_directory = value.to_string(),
-        "task_directory" => config.task_directory = value.to_string(),
-        "test_directory" => config.test_directory = value.to_string(),
         "template_dir" => {
             config.template_dir = if value == "(none)" || value.is_empty() {
                 None
@@ -82,24 +73,6 @@ mod tests {
     // ─── get_value ───────────────────────────────────────────────
 
     #[test]
-    fn get_contest_directory() {
-        let config = default_config();
-        assert_eq!(get_value(&config, "contest_directory").unwrap(), "{contest_id}");
-    }
-
-    #[test]
-    fn get_task_directory() {
-        let config = default_config();
-        assert_eq!(get_value(&config, "task_directory").unwrap(), "{task_id}");
-    }
-
-    #[test]
-    fn get_test_directory() {
-        let config = default_config();
-        assert_eq!(get_value(&config, "test_directory").unwrap(), "test");
-    }
-
-    #[test]
     fn get_template_dir_none() {
         let config = default_config();
         assert_eq!(get_value(&config, "template_dir").unwrap(), "(none)");
@@ -122,27 +95,6 @@ mod tests {
     }
 
     // ─── set_value ───────────────────────────────────────────────
-
-    #[test]
-    fn set_contest_directory() {
-        let mut config = default_config();
-        set_value(&mut config, "contest_directory", "contests/{contest_id}").unwrap();
-        assert_eq!(config.contest_directory, "contests/{contest_id}");
-    }
-
-    #[test]
-    fn set_task_directory() {
-        let mut config = default_config();
-        set_value(&mut config, "task_directory", "tasks/{task_id}").unwrap();
-        assert_eq!(config.task_directory, "tasks/{task_id}");
-    }
-
-    #[test]
-    fn set_test_directory() {
-        let mut config = default_config();
-        set_value(&mut config, "test_directory", "samples").unwrap();
-        assert_eq!(config.test_directory, "samples");
-    }
 
     #[test]
     fn set_template_dir_to_path() {
