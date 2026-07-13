@@ -2,7 +2,7 @@ use crate::commands::prepare::build_client;
 use crate::judge::{fetch_contest_list, JudgeKind};
 use owo_colors::{OwoColorize, Stream};
 
-pub async fn run(judge_str: String, limit: usize) -> anyhow::Result<()> {
+pub async fn run(judge_str: String, limit: Option<usize>) -> anyhow::Result<()> {
     let client = build_client()?;
     let judge = match judge_str.as_str() {
         "atcoder" => JudgeKind::AtCoder,
@@ -17,7 +17,9 @@ pub async fn run(judge_str: String, limit: usize) -> anyhow::Result<()> {
         judge.as_str().if_supports_color(Stream::Stdout, |s| s.cyan())
     );
     let mut contests = fetch_contest_list(&judge, &client).await?;
-    contests.truncate(limit);
+    if let Some(n) = limit {
+        contests.truncate(n);
+    }
 
     if contests.is_empty() {
         println!("No contests found.");

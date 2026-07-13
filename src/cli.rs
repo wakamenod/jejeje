@@ -54,9 +54,9 @@ File handling:
         #[arg(value_parser = ["atcoder", "codeforces", "yukicoder", "aoj"])]
         judge: String,
 
-        /// Limit the number of contests to show (default: 20)
-        #[arg(short, long, default_value_t = 20)]
-        limit: usize,
+        /// Limit the number of contests to show (default: unlimited)
+        #[arg(short, long)]
+        limit: Option<usize>,
     },
 
     /// Show or set a configuration value.
