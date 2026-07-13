@@ -22,6 +22,7 @@ async fn main() -> Result<()> {
         } => commands::test::run(command, tle, epsilon).await?,
         Commands::Contest => commands::contest::run().await?,
         Commands::Tasks => commands::tasks::run().await?,
+        Commands::Contests { judge, limit } => commands::contests::run(judge, limit).await?,
         Commands::Config { key, value } => commands::config::run(key, value).await?,
     }
 

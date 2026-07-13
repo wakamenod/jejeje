@@ -9,9 +9,13 @@ use std::{fs, path::Path};
 ///
 /// サンプルファイル (test/*.in / test/*.out) は常に最新に更新する。
 /// テンプレートファイルはコピー先が存在する場合はスキップする（回答中のファイルを保護）。
-pub async fn run(url: String) -> Result<()> {
+pub async fn run(url_or_query: String) -> Result<()> {
     let config = Config::load()?;
     let client = build_client()?;
+
+    let url = judge::resolve_query(&url_or_query, &client)
+        .await
+        .context("Failed to resolve contest query")?;
 
     if judge::is_contest_url(&url) {
         // コンテスト URL: 全タスクのディレクトリを一括作成

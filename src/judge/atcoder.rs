@@ -386,6 +386,43 @@ async fn fetch_html(url: &str, client: &reqwest::Client) -> Result<String, AppEr
     Ok(resp.text().await?)
 }
 
+/// AtCoder Problems API を利用してコンテスト一覧を取得する。
+pub async fn fetch_contest_list(
+    client: &reqwest::Client,
+) -> Result<Vec<super::model::SimpleContest>, AppError> {
+    let url = "https://kenkoooo.com/atcoder/resources/contests.json";
+    let resp: Vec<serde_json::Value> = client
+        .get(url)
+        .header(reqwest::header::USER_AGENT, "je-cli")
+        .send()
+        .await?
+        .json()
+        .await
+        .map_err(|e| AppError::SampleParse(format!("Failed to fetch AtCoder contests: {}", e)))?;
+
+    let mut contests: Vec<(i64, super::model::SimpleContest)> = Vec::new();
+    for item in resp {
+        if let (Some(id), Some(title)) = (
+            item.get("id").and_then(|v| v.as_str()),
+            item.get("title").and_then(|v| v.as_str()),
+        ) {
+            let epoch = item
+                .get("start_epoch_second")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            contests.push((epoch, super::model::SimpleContest {
+                id: id.to_string(),
+                name: title.to_string(),
+                url: format!("https://atcoder.jp/contests/{}", id),
+            }));
+        }
+    }
+
+    // start_epoch_second の降順（最新のコンテストが先頭）
+    contests.sort_by_key(|c| std::cmp::Reverse(c.0));
+    Ok(contests.into_iter().map(|(_, c)| c).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

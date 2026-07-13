@@ -10,22 +10,23 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Set up directories and download sample cases from a contest or problem URL.
+    /// Set up directories and download sample cases from a contest/problem URL or query.
     #[command(long_about = "\
-Set up directories and download sample cases from a contest or problem URL.
+Set up directories and download sample cases from a contest/problem URL or query.
 
-URL types:
+URL types & Queries:
   Contest URL  Creates one subdirectory per task and saves .je-meta.json
                e.g. https://atcoder.jp/contests/abc001
   Problem URL  Creates a single task directory inside the current contest root
                e.g. https://atcoder.jp/contests/abc001/tasks/abc001_a
+  Query        Fuzzy lookup or direct resolution by ID (e.g. abc300, cf1800, itp1)
 
 File handling:
   Samples    test/*.in and test/*.out are always overwritten with the latest data
   Templates  Copied only when the destination file does not already exist
              (existing source files are never overwritten)")]
     Prepare {
-        /// Contest URL or problem URL
+        /// Contest/Problem URL, or contest ID/query
         url: String,
     },
 
@@ -49,6 +50,17 @@ File handling:
 
     /// List all tasks in the current contest (reads .je-meta.json).
     Tasks,
+
+    /// List contests of a specific judge.
+    Contests {
+        /// Judge name (atcoder, codeforces, yukicoder, aoj)
+        #[arg(value_parser = ["atcoder", "codeforces", "yukicoder", "aoj"])]
+        judge: String,
+
+        /// Limit the number of contests to show (default: 20)
+        #[arg(short, long, default_value_t = 20)]
+        limit: usize,
+    },
 
     /// Show or set a configuration value.
     ///

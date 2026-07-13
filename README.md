@@ -43,7 +43,28 @@ je prepare https://atcoder.jp/contests/abc001
 
 # 問題 URL を渡すと単一タスクのディレクトリを追加（コンテストルートを自動検出）
 je prepare https://atcoder.jp/contests/abc001/tasks/abc001_a
+
+# URL の代わりにコンテスト ID を直接指定できる
+je prepare abc300       # → https://atcoder.jp/contests/abc300
+je prepare cf1800       # → https://codeforces.com/contest/1800
+je prepare yuki400      # → https://yukicoder.me/contests/400
+je prepare itp1         # → AOJ ITP1 コース
+
+# キーワードで曖昧検索も可能（全ジャッジから並列検索）
+je prepare "beginner 300"   # → AtCoder Beginner Contest 300 を解決
 ```
+
+対応する ID パターン:
+
+| パターン | 例 | 解決先 |
+|---|---|---|
+| `abc`, `arc`, `agc`, `ahc`, `apc`, `jsc`, `past` + 数字 | `abc300` | `atcoder.jp/contests/abc300` |
+| `cf` + 数字 | `cf1800` | `codeforces.com/contest/1800` |
+| `yuki` + 数字 | `yuki400` | `yukicoder.me/contests/400` |
+| AOJ コース名 (`itp1`, `alds1`, `dsl`, `grl`, `cgl`, `alpc`) | `itp1` | AOJ ITP1 コース |
+| キーワード | `"beginner 300"` | 全ジャッジから曖昧検索 |
+
+> **曖昧検索の動作**: 複数のコンテストがマッチした場合は候補一覧を表示してエラー終了します（非インタラクティブ）。数字のみの入力（例: `1800`）は Codeforces と yukicoder の ID 衝突を避けるため、直接解決されず曖昧検索にフォールバックします。
 
 > **再実行について**
 > 既存のタスクディレクトリに対して再度 `prepare` を実行すると、
@@ -81,6 +102,19 @@ je test -e 1e-6
 3: TLE (>2000ms)
 
 2 / 3 passed
+```
+
+### コンテスト一覧の取得
+
+```bash
+# 各ジャッジのコンテスト一覧を表示（最新順）
+je contests atcoder
+je contests codeforces
+je contests yukicoder
+je contests aoj
+
+# 表示件数を制限（デフォルト 20 件）
+je contests atcoder --limit 5
 ```
 
 ### コンテスト情報の確認
@@ -142,19 +176,19 @@ cargo test
 通常の `cargo test` では実行されません。`--ignored` フラグを付けて明示的に実行します。
 
 ```bash
-# 全ジャッジのテストを実行
+# prepare テストを全ジャッジで実行
 cargo test --test integration_prepare -- --ignored
+
+# contests テストを全ジャッジで実行
+cargo test --test integration_contests -- --ignored
 
 # 特定のジャッジのみ実行
 cargo test --test integration_prepare atcoder -- --ignored
-cargo test --test integration_prepare codeforces -- --ignored
-cargo test --test integration_prepare yukicoder -- --ignored
-cargo test --test integration_prepare aoj -- --ignored
 ```
 
 テスト対象:
 
-| テスト | 種別 | URL |
+| テスト | 種別 | 入力 |
 |---|---|---|
 | AtCoder コンテスト | `abc001` 全 4 問 | `atcoder.jp/contests/abc001` |
 | AtCoder 旧 URL | 単問 | `abc001.contest.atcoder.jp/tasks/abc001_1` |
@@ -164,15 +198,21 @@ cargo test --test integration_prepare aoj -- --ignored
 | yukicoder 単問 | No.1 | `yukicoder.me/problems/no/1` |
 | AOJ コース | ITP1 全問 | `onlinejudge.u-aizu.ac.jp/courses/lesson/1/ITP1` |
 | AOJ 旧 URL | 単問 | `judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=ITP1_1_A` |
+| 直接解決 AtCoder | ID 入力 | `abc001` |
+| 直接解決 Codeforces | ID 入力 | `cf1` |
+| 直接解決 AOJ | ID 入力 | `itp1` |
+| 曖昧検索 複数マッチ | エラー確認 | `"contest"` |
+| 曖昧検索 0 件 | エラー確認 | `"zzzznonexistent99999"` |
+| contests 各ジャッジ | 一覧取得 | `atcoder` / `codeforces` / `yukicoder` / `aoj` |
 
 ## 対応ジャッジ
 
-| ジャッジ | サンプル取得 | コンテスト取得 | 取得方式 |
-|---|---|---|---|
-| AtCoder | ✅ | ✅ | HTML スクレイピング |
-| Codeforces | ✅ | ✅ | HTML スクレイピング |
-| yukicoder | ✅ | ✅ | サンプル: HTML スクレイピング / コンテスト: 公式 REST API |
-| AOJ | ✅ | ✅ | 公式 REST API |
+| ジャッジ | サンプル取得 | コンテスト取得 | コンテスト一覧 | 取得方式 |
+|---|---|---|---|---|
+| AtCoder | ✅ | ✅ | ✅ | HTML スクレイピング / 一覧: [AtCoder Problems API](https://kenkoooo.com/atcoder/) |
+| Codeforces | ✅ | ✅ | ✅ | HTML スクレイピング / 一覧: 公式 REST API |
+| yukicoder | ✅ | ✅ | ✅ | サンプル: HTML スクレイピング / コンテスト・一覧: 公式 REST API |
+| AOJ | ✅ | ✅ | ✅ | 公式 REST API |
 
 ---
 
@@ -283,8 +323,9 @@ cargo test --test integration_prepare aoj -- --ignored
 
 - [x] 各ジャッジスクレイパーのユニットテスト（HTML フィクスチャを使ったパーステスト）
 - [x] 統合テスト（実際の問題 URL に対するエンドツーエンドテスト）
-  - `tests/integration_prepare.rs` — `#[ignore]` で通常 CI から除外し、`--ignored` フラグで明示実行
-  - AtCoder（コンテスト / 旧 URL）・Codeforces（コンテスト / 単問）・yukicoder（コンテスト / 単問）・AOJ（コース / 旧 URL）の全 8 ケース
+  - `tests/integration_prepare.rs` — URL 直接指定・ID 直接解決・曖昧検索の全 13 ケース
+  - `tests/integration_contests.rs` — コンテスト一覧取得・引数バリデーションの全 8 ケース
+  - `#[ignore]` で通常 CI から除外し、`--ignored` フラグで明示実行
 - [ ] GitHub Actions による CI の設定
 - [ ] `cargo clippy` / `cargo fmt` の CI チェック
 

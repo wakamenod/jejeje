@@ -216,6 +216,46 @@ fn extract_problem_no(url: &str) -> Result<String, AppError> {
         .ok_or_else(|| AppError::UnsupportedUrl(url.to_string()))
 }
 
+/// yukicoder API を利用してコンテスト一覧を取得する。
+pub async fn fetch_contest_list(
+    client: &reqwest::Client,
+) -> Result<Vec<super::model::SimpleContest>, AppError> {
+    let url = "https://yukicoder.me/api/v1/contest/past";
+    
+    #[derive(Debug, serde::Deserialize)]
+    struct YukiContest {
+        Id: u64,
+        Name: String,
+    }
+
+    let resp: Vec<YukiContest> = client
+        .get(url)
+        .header(reqwest::header::USER_AGENT, "je-cli")
+        .send()
+        .await?
+        .json()
+        .await
+        .map_err(|e| AppError::SampleParse(format!("Failed to fetch yukicoder contests: {}", e)))?;
+
+    let mut contests = resp
+        .into_iter()
+        .map(|c| super::model::SimpleContest {
+            id: c.Id.to_string(),
+            name: c.Name,
+            url: format!("https://yukicoder.me/contests/{}", c.Id),
+        })
+        .collect::<Vec<_>>();
+
+    // IDの降順（最新順）にソート
+    contests.sort_by(|a, b| {
+        let a_id: u64 = a.id.parse().unwrap_or(0);
+        let b_id: u64 = b.id.parse().unwrap_or(0);
+        b_id.cmp(&a_id)
+    });
+
+    Ok(contests)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

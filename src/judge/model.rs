@@ -7,6 +7,14 @@ pub struct SampleCase {
     pub output: String,
 }
 
+/// コンテスト一覧表示や曖昧検索で使用する、簡易的なコンテスト情報。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimpleContest {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+}
+
 /// コンテスト内の個別タスク情報。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskMeta {
@@ -88,6 +96,29 @@ mod tests {
         assert_eq!(contest.url, contest2.url);
         assert_eq!(contest.tasks.len(), contest2.tasks.len());
         assert_eq!(contest.tasks[0].id, contest2.tasks[0].id);
+    }
+
+    #[test]
+    fn simple_contest_json_roundtrip() {
+        let sc = SimpleContest {
+            id: "abc300".to_string(),
+            name: "AtCoder Beginner Contest 300".to_string(),
+            url: "https://atcoder.jp/contests/abc300".to_string(),
+        };
+        let json = serde_json::to_string(&sc).unwrap();
+        let sc2: SimpleContest = serde_json::from_str(&json).unwrap();
+        assert_eq!(sc.id, sc2.id);
+        assert_eq!(sc.name, sc2.name);
+        assert_eq!(sc.url, sc2.url);
+    }
+
+    #[test]
+    fn simple_contest_deserialize_from_literal() {
+        let json = r#"{"id":"cf1800","name":"Codeforces Round 1800","url":"https://codeforces.com/contest/1800"}"#;
+        let sc: SimpleContest = serde_json::from_str(json).unwrap();
+        assert_eq!(sc.id, "cf1800");
+        assert_eq!(sc.name, "Codeforces Round 1800");
+        assert_eq!(sc.url, "https://codeforces.com/contest/1800");
     }
 
     #[test]

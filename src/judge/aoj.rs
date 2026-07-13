@@ -399,6 +399,32 @@ fn extract_course_id(url: &str) -> Result<String, AppError> {
         .ok_or_else(|| AppError::UnsupportedUrl(url.to_string()))
 }
 
+/// AOJ API からコース一覧を取得し、SimpleContest 形式にする。
+pub async fn fetch_contest_list(
+    client: &reqwest::Client,
+) -> Result<Vec<super::model::SimpleContest>, AppError> {
+    let url = format!("{}/courses", JUDGE_API);
+    let resp: ApiCoursesResponse = client
+        .get(&url)
+        .header(reqwest::header::USER_AGENT, "je-cli")
+        .send()
+        .await?
+        .json()
+        .await
+        .map_err(|e| AppError::SampleParse(format!("Failed to fetch AOJ courses: {}", e)))?;
+
+    let contests = resp.courses
+        .into_iter()
+        .map(|c| super::model::SimpleContest {
+            id: c.short_name.clone(),
+            name: c.name,
+            url: format!("https://onlinejudge.u-aizu.ac.jp/courses/lesson/2/{}/1", c.short_name),
+        })
+        .collect();
+
+    Ok(contests)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

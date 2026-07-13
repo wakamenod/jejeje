@@ -213,6 +213,49 @@ async fn fetch_html(url: &str, client: &reqwest::Client) -> Result<String, AppEr
     Ok(resp.text().await?)
 }
 
+/// Codeforces API を利用してコンテスト一覧を取得する。
+pub async fn fetch_contest_list(
+    client: &reqwest::Client,
+) -> Result<Vec<super::model::SimpleContest>, AppError> {
+    let url = "https://codeforces.com/api/contest.list?gym=false";
+    
+    #[derive(Debug, serde::Deserialize)]
+    struct CfContestListResponse {
+        status: String,
+        result: Vec<CfContest>,
+    }
+
+    #[derive(Debug, serde::Deserialize)]
+    struct CfContest {
+        id: u64,
+        name: String,
+    }
+
+    let resp: CfContestListResponse = client
+        .get(url)
+        .header(reqwest::header::USER_AGENT, "je-cli")
+        .send()
+        .await?
+        .json()
+        .await
+        .map_err(|e| AppError::SampleParse(format!("Failed to fetch Codeforces contests: {}", e)))?;
+
+    if resp.status != "OK" {
+        return Err(AppError::SampleParse("Codeforces API status was not OK".to_string()));
+    }
+
+    let contests = resp.result
+        .into_iter()
+        .map(|c| super::model::SimpleContest {
+            id: c.id.to_string(),
+            name: c.name,
+            url: format!("https://codeforces.com/contest/{}", c.id),
+        })
+        .collect();
+
+    Ok(contests)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

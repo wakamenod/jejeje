@@ -17,6 +17,7 @@
 //! 過剰なリクエストを避けるため、各ジャッジあたり 2 ケース（コンテスト or 旧URL込み）に絞っている。
 
 use assert_cmd::Command;
+use predicates;
 use std::path::Path;
 use tempfile::TempDir;
 
@@ -253,4 +254,127 @@ fn aoj_prepare_problem_legacy_url() {
     );
 
     assert_samples_exist(dir.path(), "ITP1_1_A", 1);
+}
+
+// ─── 直接解決（ID 入力）─────────────────────────────────────────────────────
+
+/// `je prepare abc001` で AtCoder Beginner Contest 001 がセットアップされること。
+///
+/// 検証:
+/// - abc001/ ディレクトリと .je-meta.json が作成される
+/// - 4 問分のタスクディレクトリにサンプルが存在する
+#[test]
+#[ignore]
+fn prepare_direct_resolve_abc001() {
+    let dir = TempDir::new().unwrap();
+    run_prepare("abc001", &dir);
+
+    let contest_dir = dir.path().join("abc001");
+    assert!(contest_dir.exists(), "abc001/ not created");
+    assert!(
+        contest_dir.join(".je-meta.json").exists(),
+        ".je-meta.json not found"
+    );
+
+    for task_id in ["a", "b", "c", "d"] {
+        assert_samples_exist(&contest_dir, task_id, 1);
+    }
+}
+
+/// `je prepare cf1` で Codeforces Beta Round 1 がセットアップされること。
+///
+/// 検証:
+/// - 1/ ディレクトリと .je-meta.json が作成される
+/// - 3 問分のタスクディレクトリにサンプルが存在する
+#[test]
+#[ignore]
+fn prepare_direct_resolve_cf1() {
+    let dir = TempDir::new().unwrap();
+    run_prepare("cf1", &dir);
+
+    let contest_dir = dir.path().join("1");
+    assert!(contest_dir.exists(), "1/ not created");
+    assert!(
+        contest_dir.join(".je-meta.json").exists(),
+        ".je-meta.json not found"
+    );
+
+    for task_id in ["a", "b", "c"] {
+        assert_samples_exist(&contest_dir, task_id, 1);
+    }
+}
+
+/// `je prepare itp1` で AOJ の ITP1 コースがセットアップされること。
+///
+/// 検証:
+/// - コンテストディレクトリと .je-meta.json が作成される
+/// - 少なくとも 1 つのタスクディレクトリが存在する
+#[test]
+#[ignore]
+fn prepare_direct_resolve_itp1() {
+    let dir = TempDir::new().unwrap();
+    run_prepare("itp1", &dir);
+
+    let contest_dir = dir
+        .path()
+        .read_dir()
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .find(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .expect("No contest directory created");
+
+    assert!(
+        contest_dir.path().join(".je-meta.json").exists(),
+        ".je-meta.json not found in {:?}",
+        contest_dir.path()
+    );
+
+    let task_dirs: Vec<_> = std::fs::read_dir(contest_dir.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .collect();
+    assert!(
+        !task_dirs.is_empty(),
+        "no task directories created under {:?}",
+        contest_dir.path()
+    );
+}
+
+// ─── 曖昧検索 ──────────────────────────────────────────────────────────────
+
+/// `je prepare "contest"` のような広範すぎるクエリが複数マッチでエラー終了すること。
+///
+/// 検証:
+/// - コマンドが非ゼロ終了する
+/// - stderr に "Multiple matches" が含まれる
+#[test]
+#[ignore]
+fn prepare_fuzzy_multiple_matches_fails() {
+    let dir = TempDir::new().unwrap();
+    Command::cargo_bin("je")
+        .expect("je binary not found")
+        .args(["prepare", "contest"])
+        .current_dir(dir.path())
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("Multiple matches"));
+}
+
+/// 存在しないクエリでエラー終了すること。
+///
+/// 検証:
+/// - コマンドが非ゼロ終了する
+/// - stderr に "No contests found" が含まれる
+#[test]
+#[ignore]
+fn prepare_fuzzy_no_matches_fails() {
+    let dir = TempDir::new().unwrap();
+    Command::cargo_bin("je")
+        .expect("je binary not found")
+        .args(["prepare", "zzzznonexistent99999"])
+        .current_dir(dir.path())
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("No contests found"));
 }
