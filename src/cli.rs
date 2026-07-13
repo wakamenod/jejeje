@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 
-/// Competitive programming helper — sample download & test runner
+/// Competitive programming helper — directory setup & test runner
 #[derive(Parser)]
 #[command(name = "je", version, about, long_about = None)]
 pub struct Cli {
@@ -10,35 +10,27 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Create a contest directory, download all samples, and save metadata.
-    ///
-    /// Accepts a contest URL (e.g. https://atcoder.jp/contests/abc001).
-    /// Creates one subdirectory per task and populates test/ with sample cases.
-    New {
-        /// Contest URL
+    /// Set up directories and download sample cases from a contest or problem URL.
+    #[command(long_about = "\
+Set up directories and download sample cases from a contest or problem URL.
+
+URL types:
+  Contest URL  Creates one subdirectory per task and saves .je-meta.json
+               e.g. https://atcoder.jp/contests/abc001
+  Problem URL  Creates a single task directory inside the current contest root
+               e.g. https://atcoder.jp/contests/abc001/tasks/abc001_a
+
+File handling:
+  Samples    test/*.in and test/*.out are always overwritten with the latest data
+  Templates  Copied only when the destination file does not already exist
+             (existing source files are never overwritten)")]
+    Prepare {
+        /// Contest URL or problem URL
         url: String,
 
         /// Template name to copy into each task directory
         #[arg(short, long)]
         template: Option<String>,
-    },
-
-    /// Add a single task directory with samples inside the current contest directory.
-    ///
-    /// Accepts a problem URL (e.g. https://atcoder.jp/contests/abc001/tasks/abc001_a).
-    Add {
-        /// Problem URL
-        url: String,
-
-        /// Template name to copy into the task directory
-        #[arg(short, long)]
-        template: Option<String>,
-    },
-
-    /// Download (or re-download) sample cases for a problem URL into test/.
-    Download {
-        /// Problem URL
-        url: String,
     },
 
     /// Run sample test cases against your solution and report AC / WA / TLE / RE.

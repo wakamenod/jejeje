@@ -23,11 +23,11 @@ cp target/release/je ~/.local/bin/  # PATH の通った場所へコピー
 
 ## 使い方
 
-### コンテストのセットアップ
+### コンテスト・問題のセットアップ
 
 ```bash
 # コンテスト URL からディレクトリ作成・サンプル取得・メタデータ保存を一括実行
-je new https://atcoder.jp/contests/abc001
+je prepare https://atcoder.jp/contests/abc001
 
 # 生成されるディレクトリ構造:
 # abc001/
@@ -40,21 +40,16 @@ je new https://atcoder.jp/contests/abc001
 #     └── test/
 #         ├── 1.in
 #         └── 1.out
+
+# 問題 URL を渡すと単一タスクのディレクトリを追加（コンテストルートを自動検出）
+je prepare https://atcoder.jp/contests/abc001/tasks/abc001_a
 ```
 
-### 問題の個別追加
-
-```bash
-# 問題 URL から単一タスクのディレクトリを追加
-je add https://atcoder.jp/contests/abc001/tasks/abc001_a
-```
-
-### サンプルの再取得
-
-```bash
-# サンプルケースのみ再ダウンロード（test/ に上書き）
-je download https://atcoder.jp/contests/abc001/tasks/abc001_a
-```
+> **サンプルの再取得について**
+> 既存のタスクディレクトリに対して再度 `prepare` を実行すると、
+> サンプルファイル (`test/*.in` / `test/*.out`) は常に最新に更新されます。
+> テンプレートファイルはすでに存在する場合はスキップされるため、
+> 回答中のコードが上書きされることはありません。
 
 ### テスト実行
 
@@ -125,18 +120,19 @@ je config default_template cpp
 
 ### テンプレート機能
 
-`template_dir` 以下にディレクトリを作成し、その中にファイルを置くと `new` / `add` 実行時にタスクディレクトリへコピーされます。
+`template_dir` 以下にディレクトリを作成し、その中にファイルを置くと `prepare` 実行時にタスクディレクトリへコピーされます。
+ファイルがすでに存在する場合はスキップされるため、回答中のコードが上書きされることはありません。
 
 ```
 ~/.config/je/templates/
 └── cpp/
-    └── main.cpp   ← タスクディレクトリにコピーされる
+    └── main.cpp   ← タスクディレクトリにコピーされる（既存の場合はスキップ）
 ```
 
 ```bash
 je config template_dir ~/.config/je/templates
 je config default_template cpp
-je new https://atcoder.jp/contests/abc001
+je prepare https://atcoder.jp/contests/abc001
 # → abc001/a/main.cpp, abc001/b/main.cpp ... が自動配置される
 ```
 
@@ -202,7 +198,7 @@ je new https://atcoder.jp/contests/abc001
 
 ### 🟡 優先度中
 
-#### `je new` / `je add` の改善
+#### `je prepare` の改善
 
 - [ ] `contest_directory` / `task_directory` 設定値のプレースホルダー展開
   - 現状: 設定値 `{contest_id}` がそのままディレクトリ名になっている
