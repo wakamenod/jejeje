@@ -120,11 +120,8 @@ je contests atcoder --limit 5
 ### コンテスト情報の確認
 
 ```bash
-# コンテスト情報を表示（.je-meta.json を参照）
-je contest
-
-# タスク一覧を表示
-je tasks
+# コンテスト情報とタスク一覧を表示（.je-meta.json を参照）
+je info
 ```
 
 ### 設定
@@ -316,7 +313,7 @@ cargo test --test integration_prepare atcoder -- --ignored
 
 - [ ] シェル補完スクリプトの生成（`je completions bash/zsh/fish`）
 - [ ] `je config` での設定一覧のカラー表示
-- [ ] `je tasks` でタスクの URL をクリッカブル表示（OSC 8 ハイパーリンク）
+- [ ] `je info` でタスクの URL をクリッカブル表示（OSC 8 ハイパーリンク）
 - [ ] コンテスト作成時に生成されたディレクトリへ `cd` するためのシェル関数の提供
 
 #### テスト・CI

@@ -45,11 +45,8 @@ File handling:
         epsilon: Option<f64>,
     },
 
-    /// Show contest metadata for the current directory (reads .je-meta.json).
-    Contest,
-
-    /// List all tasks in the current contest (reads .je-meta.json).
-    Tasks,
+    /// Show contest info and task list for the current directory (reads .je-meta.json).
+    Info,
 
     /// List contests of a specific judge.
     Contests {
