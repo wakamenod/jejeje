@@ -44,7 +44,7 @@ pub async fn run(command: Option<String>, tle: f64, epsilon: Option<f64>) -> Res
 
     if !test_dir.exists() {
         anyhow::bail!(
-            "Test directory '{}' not found. Run `je download` first.",
+            "Test directory '{}' not found. Run `je prepare` first.",
             test_dir.display()
         );
     }

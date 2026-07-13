@@ -34,7 +34,7 @@ pub enum AppError {
     SampleParse(String),
 
     /// メタデータファイルが見つからない
-    #[error("No metadata found. Run `je new` or `je add` first.")]
+    #[error("No metadata found. Run `je prepare` first.")]
     MetaNotFound,
 
     /// OS 標準ディレクトリの取得に失敗
@@ -63,7 +63,7 @@ mod tests {
         let err = AppError::MetaNotFound;
         assert_eq!(
             err.to_string(),
-            "No metadata found. Run `je new` or `je add` first."
+            "No metadata found. Run `je prepare` first."
         );
     }
 
