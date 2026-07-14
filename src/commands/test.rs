@@ -38,7 +38,12 @@ struct TestOutcome {
 // ─── エントリポイント ──────────────────────────────────────────────
 
 /// `je test` — テストケースを実行して AC / WA / TLE / RE を判定する。
-pub async fn run(command: Option<String>, tle: f64, epsilon: Option<f64>) -> Result<()> {
+pub async fn run(
+    command: Option<String>,
+    tle: f64,
+    epsilon: Option<f64>,
+    trim_trailing_whitespace: bool,
+) -> Result<()> {
     let cmd = command.as_deref().unwrap_or("./a.out");
     let test_dir = Path::new("test");
 
@@ -89,7 +94,7 @@ pub async fn run(command: Option<String>, tle: f64, epsilon: Option<f64>) -> Res
             Verdict::Ac => {
                 // execute() 内では出力があるだけで Ac になっていないため、ここで比較
                 let actual = outcome.actual.as_deref().unwrap_or("");
-                if compare(actual, &expected, epsilon) {
+                if compare(actual, &expected, epsilon, trim_trailing_whitespace) {
                     Verdict::Ac
                 } else {
                     Verdict::Wa
@@ -221,7 +226,41 @@ async fn execute(cmd: &str, input: &str, time_limit: Duration) -> Result<TestOut
 
 /// 実際の出力と期待出力を比較する。
 /// `epsilon` が指定されている場合は浮動小数点の絶対誤差・相対誤差で比較する。
-fn compare(actual: &str, expected: &str, epsilon: Option<f64>) -> bool {
+/// 改行コード (`\r\n` → `\n`) は常に正規化する。
+/// `trim_trailing_whitespace` が true の場合、各行の末尾空白を除去してから比較する。
+fn compare(actual: &str, expected: &str, epsilon: Option<f64>, trim_trailing_whitespace: bool) -> bool {
+    // \r\n → \n の正規化（常時適用）
+    let actual_owned;
+    let expected_owned;
+    let actual = if actual.contains('\r') {
+        actual_owned = actual.replace("\r\n", "\n");
+        actual_owned.as_str()
+    } else {
+        actual
+    };
+    let expected = if expected.contains('\r') {
+        expected_owned = expected.replace("\r\n", "\n");
+        expected_owned.as_str()
+    } else {
+        expected
+    };
+
+    // 行末空白の正規化（オプション）
+    let actual_ls;
+    let expected_ls;
+    let actual = if trim_trailing_whitespace {
+        actual_ls = actual.lines().map(str::trim_end).collect::<Vec<_>>().join("\n");
+        actual_ls.as_str()
+    } else {
+        actual
+    };
+    let expected = if trim_trailing_whitespace {
+        expected_ls = expected.lines().map(str::trim_end).collect::<Vec<_>>().join("\n");
+        expected_ls.as_str()
+    } else {
+        expected
+    };
+
     let actual = actual.trim();
     let expected = expected.trim();
 
@@ -291,66 +330,111 @@ mod tests {
 
     #[test]
     fn compare_identical() {
-        assert!(compare("hello", "hello", None));
+        assert!(compare("hello", "hello", None, false));
     }
 
     #[test]
     fn compare_trims_leading_trailing_whitespace() {
-        assert!(compare("  hello\n", "hello", None));
+        assert!(compare("  hello\n", "hello", None, false));
     }
 
     #[test]
     fn compare_trims_both_sides() {
-        assert!(compare("  42\n", "  42  ", None));
+        assert!(compare("  42\n", "  42  ", None, false));
     }
 
     #[test]
     fn compare_different_strings() {
-        assert!(!compare("hello", "world", None));
+        assert!(!compare("hello", "world", None, false));
     }
 
     #[test]
     fn compare_case_sensitive() {
-        assert!(!compare("Hello", "hello", None));
+        assert!(!compare("Hello", "hello", None, false));
     }
 
     #[test]
     fn compare_newline_difference_after_trim() {
         // trim() は末尾改行も除くので、改行の有無は関係ない
-        assert!(compare("42\n", "42", None));
+        assert!(compare("42\n", "42", None, false));
     }
 
     #[test]
     fn compare_multiline_identical() {
-        assert!(compare("1\n2\n3\n", "1\n2\n3", None));
+        assert!(compare("1\n2\n3\n", "1\n2\n3", None, false));
     }
 
     #[test]
     fn compare_multiline_different() {
-        assert!(!compare("1\n2\n3\n", "1\n2\n4", None));
+        assert!(!compare("1\n2\n3\n", "1\n2\n4", None, false));
     }
 
     // compare with epsilon ─────────────────────────────────────────
 
     #[test]
     fn compare_float_exact_match_no_epsilon_needed() {
-        assert!(compare("3.14", "3.14", Some(1e-9)));
+        assert!(compare("3.14", "3.14", Some(1e-9), false));
     }
 
     #[test]
     fn compare_float_within_absolute_tolerance() {
-        assert!(compare("1.0000001", "1.0", Some(1e-6)));
+        assert!(compare("1.0000001", "1.0", Some(1e-6), false));
     }
 
     #[test]
     fn compare_float_outside_tolerance() {
-        assert!(!compare("1.01", "1.0", Some(1e-9)));
+        assert!(!compare("1.01", "1.0", Some(1e-9), false));
     }
 
     #[test]
     fn compare_float_relative_tolerance() {
         // |1.0001 - 1.0| / |1.0| = 1e-4 <= 1e-3
-        assert!(compare("1.0001", "1.0", Some(1e-3)));
+        assert!(compare("1.0001", "1.0", Some(1e-3), false));
+    }
+
+    // CRLF normalization ───────────────────────────────────────────
+
+    #[test]
+    fn compare_crlf_actual_normalized() {
+        // Windows 改行で出力されても LF に正規化して一致
+        assert!(compare("42\r\n", "42\n", None, false));
+    }
+
+    #[test]
+    fn compare_crlf_both_normalized() {
+        assert!(compare("1\r\n2\r\n3\r\n", "1\n2\n3\n", None, false));
+    }
+
+    #[test]
+    fn compare_crlf_expected_normalized() {
+        // 期待値が CRLF でも正規化して比較できる
+        assert!(compare("1\n2\n3\n", "1\r\n2\r\n3\r\n", None, false));
+    }
+
+    // trim_trailing_whitespace ─────────────────────────────────────
+
+    #[test]
+    fn compare_trim_trailing_whitespace_single_line() {
+        // 行末スペースが実際の出力に含まれていても一致とみなす
+        assert!(compare("hello   ", "hello", None, true));
+    }
+
+    #[test]
+    fn compare_trim_trailing_whitespace_multiline() {
+        assert!(compare("1  \n2   \n3\n", "1\n2\n3\n", None, true));
+    }
+
+    #[test]
+    fn compare_no_trim_trailing_whitespace_fails() {
+        // オプションなしでは行末スペースも比較対象（ただし全体 trim で末尾は消える）
+        // 中間行の末尾スペースは消えないので不一致
+        assert!(!compare("1  \n2   \n3", "1\n2\n3", None, false));
+    }
+
+    #[test]
+    fn compare_trim_trailing_whitespace_crlf_combined() {
+        // CRLF 正規化 + 行末空白除去の組み合わせ
+        assert!(compare("1  \r\n2   \r\n3\r\n", "1\n2\n3\n", None, true));
     }
 
     // ─── compare_float ───────────────────────────────────────────

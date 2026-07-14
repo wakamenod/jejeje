@@ -43,6 +43,10 @@ File handling:
         /// Floating-point tolerance for answer comparison (e.g. 1e-6)
         #[arg(short, long)]
         epsilon: Option<f64>,
+
+        /// Strip trailing whitespace from each line before comparing
+        #[arg(long)]
+        trim_trailing_whitespace: bool,
     },
 
     /// Show contest info and task list for the current directory (reads .je-meta.json).
