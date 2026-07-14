@@ -45,16 +45,10 @@ pub fn is_contest_url(url: &str) -> bool {
     is_url(url) && url.contains("/contests/")
 }
 
-pub fn is_problem_url(url: &str) -> bool {
-    is_url(url) && url.contains("/problems/no/")
-}
-
 // ─── API レスポンス型 ──────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
 struct ApiContest {
-    #[serde(rename = "Id")]
-    id: u64,
     #[serde(rename = "Name")]
     name: String,
     #[serde(rename = "ProblemIdList")]
@@ -269,8 +263,10 @@ pub async fn fetch_contest_list(
     
     #[derive(Debug, serde::Deserialize)]
     struct YukiContest {
-        Id: u64,
-        Name: String,
+        #[serde(rename = "Id")]
+        id: u64,
+        #[serde(rename = "Name")]
+        name: String,
     }
 
     let resp: Vec<YukiContest> = client
@@ -285,9 +281,9 @@ pub async fn fetch_contest_list(
     let mut contests = resp
         .into_iter()
         .map(|c| super::model::SimpleContest {
-            id: c.Id.to_string(),
-            name: c.Name,
-            url: format!("https://yukicoder.me/contests/{}", c.Id),
+            id: c.id.to_string(),
+            name: c.name,
+            url: format!("https://yukicoder.me/contests/{}", c.id),
         })
         .collect::<Vec<_>>();
 
@@ -330,16 +326,6 @@ mod tests {
     #[test]
     fn is_contest_url_false_for_problem() {
         assert!(!is_contest_url("https://yukicoder.me/problems/no/1"));
-    }
-
-    #[test]
-    fn is_problem_url_true() {
-        assert!(is_problem_url("https://yukicoder.me/problems/no/1"));
-    }
-
-    #[test]
-    fn is_problem_url_false_for_contest() {
-        assert!(!is_problem_url("https://yukicoder.me/contests/400"));
     }
 
     // ─── extract_contest_id ──────────────────────────────────────

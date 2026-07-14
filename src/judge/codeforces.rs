@@ -30,11 +30,6 @@ pub fn is_contest_url(url: &str) -> bool {
         && !url.contains("/problem/")
 }
 
-pub fn is_problem_url(url: &str) -> bool {
-    is_url(url)
-        && (url.contains("/problem/") || url.contains("/problemset/problem/"))
-}
-
 // ─── コンテスト取得 ─────────────────────────────────────────────────
 
 pub async fn fetch_contest(
@@ -345,25 +340,6 @@ mod tests {
         assert!(!is_contest_url(
             "https://codeforces.com/contest/1234/problem/A"
         ));
-    }
-
-    #[test]
-    fn is_problem_url_problem() {
-        assert!(is_problem_url(
-            "https://codeforces.com/contest/1234/problem/A"
-        ));
-    }
-
-    #[test]
-    fn is_problem_url_problemset() {
-        assert!(is_problem_url(
-            "https://codeforces.com/problemset/problem/1234/A"
-        ));
-    }
-
-    #[test]
-    fn is_problem_url_false_for_contest() {
-        assert!(!is_problem_url("https://codeforces.com/contest/1234"));
     }
 
     // ─── extract_contest_id ──────────────────────────────────────

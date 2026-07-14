@@ -51,10 +51,6 @@ pub fn is_challenge_url(url: &str) -> bool {
     is_url(url) && url.contains("/challenges/sources/")
 }
 
-pub fn is_problem_url(url: &str) -> bool {
-    is_url(url) && (url.contains("/problems/") || url.contains("description.jsp"))
-}
-
 // ─── API レスポンス型 ──────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
@@ -748,20 +744,6 @@ mod tests {
     fn is_contest_url_false_for_problem() {
         assert!(!is_contest_url(
             "https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A"
-        ));
-    }
-
-    #[test]
-    fn is_problem_url_problems_path() {
-        assert!(is_problem_url(
-            "https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A"
-        ));
-    }
-
-    #[test]
-    fn is_problem_url_description_jsp() {
-        assert!(is_problem_url(
-            "https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=ITP1_1_A"
         ));
     }
 
