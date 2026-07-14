@@ -139,6 +139,29 @@ struct ApiVolumeProblem {
     name: String,
 }
 
+/// `GET /challenges` のレスポンス
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApiChallengesResponse {
+    large_cls: Vec<ApiLargeCls>,
+}
+
+/// Challenges の大分類（例: "ICPC", "JOI"）
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApiLargeCls {
+    id: String,
+    title: String,
+    middle_cls: Vec<ApiMiddleCls>,
+}
+
+/// Challenges の中分類（例: "Regional", "Prelim"）
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ApiMiddleCls {
+    id: String,
+}
+
 // ─── コンテスト取得（コース対応）───────────────────────────────────
 
 /// AOJ のコース / Volume URL からタスク一覧を取得する。
@@ -399,28 +422,70 @@ fn extract_course_id(url: &str) -> Result<String, AppError> {
         .ok_or_else(|| AppError::UnsupportedUrl(url.to_string()))
 }
 
-/// AOJ API からコース一覧を取得し、SimpleContest 形式にする。
+/// AOJ API からコース一覧とチャレンジ一覧を並列取得し、SimpleContest 形式にする。
+///
+/// - `GET /courses`    → 学習コース（ITP1, ALDS1 など）
+/// - `GET /challenges` → コンテスト問題集（ICPC, JOI, PCK など largeCls/middleCls 単位）
 pub async fn fetch_contest_list(
     client: &reqwest::Client,
 ) -> Result<Vec<super::model::SimpleContest>, AppError> {
-    let url = format!("{}/courses", JUDGE_API);
-    let resp: ApiCoursesResponse = client
-        .get(&url)
+    let courses_fut = client
+        .get(format!("{JUDGE_API}/courses"))
         .header(reqwest::header::USER_AGENT, "je-cli")
-        .send()
-        .await?
+        .send();
+    let challenges_fut = client
+        .get(format!("{JUDGE_API}/challenges"))
+        .header(reqwest::header::USER_AGENT, "je-cli")
+        .send();
+
+    let (courses_res, challenges_res) = tokio::join!(courses_fut, challenges_fut);
+
+    // ── コース一覧 ──
+    let courses_resp: ApiCoursesResponse = courses_res?
         .json()
         .await
-        .map_err(|e| AppError::SampleParse(format!("Failed to fetch AOJ courses: {}", e)))?;
+        .map_err(|e| AppError::SampleParse(format!("Failed to fetch AOJ courses: {e}")))?;
 
-    let contests = resp.courses
-        .into_iter()
-        .map(|c| super::model::SimpleContest {
-            id: c.short_name.clone(),
-            name: c.name,
-            url: format!("https://onlinejudge.u-aizu.ac.jp/courses/lesson/2/{}/1", c.short_name),
-        })
-        .collect();
+    let course_contests =
+        courses_resp
+            .courses
+            .into_iter()
+            .map(|c| super::model::SimpleContest {
+                id: c.short_name.clone(),
+                name: c.name,
+                url: format!(
+                    "https://onlinejudge.u-aizu.ac.jp/courses/lesson/2/{}/1",
+                    c.short_name
+                ),
+            });
+
+    // ── チャレンジ一覧（largeCls/middleCls を展開して各 middleCls を 1 コンテストとして扱う）──
+    let challenges_resp: ApiChallengesResponse = challenges_res?
+        .json()
+        .await
+        .map_err(|e| AppError::SampleParse(format!("Failed to fetch AOJ challenges: {e}")))?;
+
+    let challenge_contests =
+        challenges_resp
+            .large_cls
+            .into_iter()
+            .flat_map(|large| {
+                let large_id = large.id.clone();
+                let large_title = large.title.clone();
+                large.middle_cls.into_iter().map(move |middle| {
+                    super::model::SimpleContest {
+                        id: format!("{}/{}", large_id, middle.id),
+                        name: format!("{} - {}", large_title, middle.id),
+                        url: format!(
+                            "https://onlinejudge.u-aizu.ac.jp/challenges/sources/{}/{}",
+                            large_id, middle.id
+                        ),
+                    }
+                })
+            });
+
+    let contests: Vec<super::model::SimpleContest> =
+        course_contests.chain(challenge_contests).collect();
 
     Ok(contests)
 }
