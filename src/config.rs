@@ -5,7 +5,12 @@ use std::path::PathBuf;
 
 fn default_template_dir() -> Option<String> {
     directories::BaseDirs::new()
-        .map(|b| b.home_dir().join(".config").join("jejeje").join("templates"))
+        .map(|b| {
+            b.home_dir()
+                .join(".config")
+                .join("jejeje")
+                .join("templates")
+        })
         .and_then(|p| p.to_str().map(|s| s.to_string()))
 }
 
@@ -94,7 +99,10 @@ mod tests {
         };
         let toml_str = toml::to_string_pretty(&original).unwrap();
         let restored: Config = toml::from_str(&toml_str).unwrap();
-        assert_eq!(restored.template_dir, Some("/home/user/templates".to_string()));
+        assert_eq!(
+            restored.template_dir,
+            Some("/home/user/templates".to_string())
+        );
     }
 
     // ─── save() / load() ─────────────────────────────────────────
@@ -116,6 +124,9 @@ mod tests {
         // 読み込んで検証
         let content = fs::read_to_string(&path).unwrap();
         let loaded: Config = toml::from_str(&content).unwrap();
-        assert_eq!(loaded.template_dir, Some("/home/user/templates".to_string()));
+        assert_eq!(
+            loaded.template_dir,
+            Some("/home/user/templates".to_string())
+        );
     }
 }

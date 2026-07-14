@@ -94,10 +94,7 @@ fn atcoder_prepare_contest_abc001() {
 #[ignore]
 fn atcoder_prepare_problem_legacy_url() {
     let dir = TempDir::new().unwrap();
-    run_prepare(
-        "https://abc001.contest.atcoder.jp/tasks/abc001_1",
-        &dir,
-    );
+    run_prepare("https://abc001.contest.atcoder.jp/tasks/abc001_1", &dir);
 
     assert_samples_exist(dir.path(), "abc001_1", 1);
 }
@@ -112,10 +109,7 @@ fn atcoder_prepare_problem_legacy_url() {
 #[ignore]
 fn codeforces_prepare_problem() {
     let dir = TempDir::new().unwrap();
-    run_prepare(
-        "https://codeforces.com/contest/1/problem/A",
-        &dir,
-    );
+    run_prepare("https://codeforces.com/contest/1/problem/A", &dir);
 
     assert_samples_exist(dir.path(), "A", 1);
 }

@@ -1,12 +1,12 @@
-pub mod atcoder;
 pub mod aoj;
+pub mod atcoder;
 pub mod codeforces;
 pub mod model;
 pub mod yukicoder;
 
 use crate::error::AppError;
-use model::{ContestMeta, SampleCase};
 pub use model::SimpleContest;
+use model::{ContestMeta, SampleCase};
 
 // ─── ジャッジ判別 ──────────────────────────────────────────────────
 
@@ -48,10 +48,7 @@ impl JudgeKind {
 // ─── 公開 API ────────────────────────────────────────────────────
 
 /// コンテスト URL からメタデータ（タスク一覧含む）を取得する。
-pub async fn fetch_contest(
-    url: &str,
-    client: &reqwest::Client,
-) -> Result<ContestMeta, AppError> {
+pub async fn fetch_contest(url: &str, client: &reqwest::Client) -> Result<ContestMeta, AppError> {
     match JudgeKind::from_url(url)? {
         JudgeKind::AtCoder => atcoder::fetch_contest(url, client).await,
         JudgeKind::Codeforces => codeforces::fetch_contest(url, client).await,
@@ -109,7 +106,8 @@ fn try_direct_resolve(query: &str) -> Option<String> {
     // AtCoder ID パターン (例: abc300, arc120)
     let atcoder_prefixes = ["abc", "arc", "agc", "ahc", "apc", "jsc", "past"];
     for p in atcoder_prefixes {
-        if q.starts_with(p) && q[p.len()..].chars().all(|c| c.is_ascii_digit()) && q.len() > p.len() {
+        if q.starts_with(p) && q[p.len()..].chars().all(|c| c.is_ascii_digit()) && q.len() > p.len()
+        {
             return Some(format!("https://atcoder.jp/contests/{}", q));
         }
     }
@@ -153,52 +151,65 @@ fn fuzzy_search_contests<'a>(
     query: &str,
     judges: &[(&'a str, Vec<SimpleContest>)],
 ) -> Result<String, AppError> {
-    let tokens: Vec<String> = query.to_lowercase().split_whitespace().map(String::from).collect();
+    let tokens: Vec<String> = query
+        .to_lowercase()
+        .split_whitespace()
+        .map(String::from)
+        .collect();
 
     let mut matches: Vec<(&str, SimpleContest)> = Vec::new();
 
     for (judge_name, list) in judges {
         for c in list {
-            if matches_all_tokens(&tokens, &c.id)
-                || matches_all_tokens(&tokens, &c.name)
-            {
+            if matches_all_tokens(&tokens, &c.id) || matches_all_tokens(&tokens, &c.name) {
                 matches.push((judge_name, c.clone()));
             }
         }
     }
 
     match matches.len() {
-        0 => Err(AppError::SampleParse(format!("No contests found matching '{}'", query))),
+        0 => Err(AppError::SampleParse(format!(
+            "No contests found matching '{}'",
+            query
+        ))),
         1 => {
             let (judge, contest) = &matches[0];
-            println!("Found matching contest on {}: {} - {}", judge, contest.id, contest.name);
+            println!(
+                "Found matching contest on {}: {} - {}",
+                judge, contest.id, contest.name
+            );
             Ok(contest.url.clone())
         }
         n => {
             eprintln!("Multiple contests found for '{}' ({} matches):", query, n);
             for (judge, contest) in matches.iter().take(FUZZY_DISPLAY_LIMIT) {
-                eprintln!("  [{}] {} — {} ({})", judge, contest.id, contest.name, contest.url);
+                eprintln!(
+                    "  [{}] {} — {} ({})",
+                    judge, contest.id, contest.name, contest.url
+                );
             }
             if n > FUZZY_DISPLAY_LIMIT {
                 eprintln!("  ... and {} more", n - FUZZY_DISPLAY_LIMIT);
             }
-            Err(AppError::SampleParse("Multiple matches found. Please specify a more specific query or URL.".to_string()))
+            Err(AppError::SampleParse(
+                "Multiple matches found. Please specify a more specific query or URL.".to_string(),
+            ))
         }
     }
 }
 
 /// ユーザー入力（URLまたはクエリ）を解決し、最終的なコンテストURLを返す。
-pub async fn resolve_query(
-    query: &str,
-    client: &reqwest::Client,
-) -> Result<String, AppError> {
+pub async fn resolve_query(query: &str, client: &reqwest::Client) -> Result<String, AppError> {
     // 1. 直接解決を試みる
     if let Some(url) = try_direct_resolve(query) {
         return Ok(url);
     }
 
     // 2. 曖昧検索（すべてのジャッジから並列取得してトークン AND 部分一致で検索）
-    println!("Query '{}' did not match direct patterns. Searching all judges...", query);
+    println!(
+        "Query '{}' did not match direct patterns. Searching all judges...",
+        query
+    );
 
     let (at_res, cf_res, yuki_res, aoj_res) = tokio::join!(
         atcoder::fetch_contest_list(client),
@@ -208,7 +219,12 @@ pub async fn resolve_query(
     );
 
     let mut judge_lists: Vec<(&str, Vec<SimpleContest>)> = Vec::new();
-    for (name, res) in [("atcoder", at_res), ("codeforces", cf_res), ("yukicoder", yuki_res), ("aoj", aoj_res)] {
+    for (name, res) in [
+        ("atcoder", at_res),
+        ("codeforces", cf_res),
+        ("yukicoder", yuki_res),
+        ("aoj", aoj_res),
+    ] {
         if let Ok(list) = res {
             judge_lists.push((name, list));
         }
@@ -232,33 +248,26 @@ mod tests {
 
     #[test]
     fn from_url_atcoder_problem() {
-        let kind = JudgeKind::from_url(
-            "https://atcoder.jp/contests/abc001/tasks/abc001_a",
-        )
-        .unwrap();
+        let kind =
+            JudgeKind::from_url("https://atcoder.jp/contests/abc001/tasks/abc001_a").unwrap();
         assert_eq!(kind, JudgeKind::AtCoder);
     }
 
     #[test]
     fn from_url_atcoder_legacy_contest() {
-        let kind =
-            JudgeKind::from_url("https://abc001.contest.atcoder.jp/").unwrap();
+        let kind = JudgeKind::from_url("https://abc001.contest.atcoder.jp/").unwrap();
         assert_eq!(kind, JudgeKind::AtCoder);
     }
 
     #[test]
     fn from_url_atcoder_legacy_problem() {
-        let kind = JudgeKind::from_url(
-            "https://abc001.contest.atcoder.jp/tasks/abc001_a",
-        )
-        .unwrap();
+        let kind = JudgeKind::from_url("https://abc001.contest.atcoder.jp/tasks/abc001_a").unwrap();
         assert_eq!(kind, JudgeKind::AtCoder);
     }
 
     #[test]
     fn from_url_codeforces_contest() {
-        let kind =
-            JudgeKind::from_url("https://codeforces.com/contest/1234").unwrap();
+        let kind = JudgeKind::from_url("https://codeforces.com/contest/1234").unwrap();
         assert_eq!(kind, JudgeKind::Codeforces);
     }
 
@@ -270,24 +279,20 @@ mod tests {
 
     #[test]
     fn from_url_yukicoder_contest() {
-        let kind =
-            JudgeKind::from_url("https://yukicoder.me/contests/400").unwrap();
+        let kind = JudgeKind::from_url("https://yukicoder.me/contests/400").unwrap();
         assert_eq!(kind, JudgeKind::Yukicoder);
     }
 
     #[test]
     fn from_url_yukicoder_problem() {
-        let kind =
-            JudgeKind::from_url("https://yukicoder.me/problems/no/1").unwrap();
+        let kind = JudgeKind::from_url("https://yukicoder.me/problems/no/1").unwrap();
         assert_eq!(kind, JudgeKind::Yukicoder);
     }
 
     #[test]
     fn from_url_aoj_problem() {
-        let kind = JudgeKind::from_url(
-            "https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A",
-        )
-        .unwrap();
+        let kind =
+            JudgeKind::from_url("https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A").unwrap();
         assert_eq!(kind, JudgeKind::Aoj);
     }
 
@@ -540,37 +545,42 @@ mod tests {
     /// テスト用のコンテスト一覧を生成するヘルパー。
     fn sample_contest_lists() -> Vec<(&'static str, Vec<SimpleContest>)> {
         vec![
-            ("atcoder", vec![
-                SimpleContest {
-                    id: "abc300".to_string(),
-                    name: "AtCoder Beginner Contest 300".to_string(),
-                    url: "https://atcoder.jp/contests/abc300".to_string(),
-                },
-                SimpleContest {
-                    id: "abc301".to_string(),
-                    name: "AtCoder Beginner Contest 301".to_string(),
-                    url: "https://atcoder.jp/contests/abc301".to_string(),
-                },
-                SimpleContest {
-                    id: "arc150".to_string(),
-                    name: "AtCoder Regular Contest 150".to_string(),
-                    url: "https://atcoder.jp/contests/arc150".to_string(),
-                },
-            ]),
-            ("codeforces", vec![
-                SimpleContest {
+            (
+                "atcoder",
+                vec![
+                    SimpleContest {
+                        id: "abc300".to_string(),
+                        name: "AtCoder Beginner Contest 300".to_string(),
+                        url: "https://atcoder.jp/contests/abc300".to_string(),
+                    },
+                    SimpleContest {
+                        id: "abc301".to_string(),
+                        name: "AtCoder Beginner Contest 301".to_string(),
+                        url: "https://atcoder.jp/contests/abc301".to_string(),
+                    },
+                    SimpleContest {
+                        id: "arc150".to_string(),
+                        name: "AtCoder Regular Contest 150".to_string(),
+                        url: "https://atcoder.jp/contests/arc150".to_string(),
+                    },
+                ],
+            ),
+            (
+                "codeforces",
+                vec![SimpleContest {
                     id: "1800".to_string(),
                     name: "Codeforces Round 1800".to_string(),
                     url: "https://codeforces.com/contest/1800".to_string(),
-                },
-            ]),
-            ("yukicoder", vec![
-                SimpleContest {
+                }],
+            ),
+            (
+                "yukicoder",
+                vec![SimpleContest {
                     id: "400".to_string(),
                     name: "yukicoder contest 400".to_string(),
                     url: "https://yukicoder.me/contests/400".to_string(),
-                },
-            ]),
+                }],
+            ),
         ]
     }
 
@@ -644,6 +654,11 @@ mod tests {
         let lists: Vec<(&str, Vec<SimpleContest>)> = vec![];
         let result = fuzzy_search_contests("anything", &lists);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No contests found"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No contests found")
+        );
     }
 }

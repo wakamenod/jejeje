@@ -58,7 +58,9 @@ pub async fn run(url_or_query: String) -> Result<()> {
         println!("Preparing task '{task_id}'...");
         let copied_file = setup_task_dir(&task_dir, &url, &config, &client)
             .await
-            .with_context(|| format!("Failed to prepare task directory '{}'", task_dir.display()))?;
+            .with_context(|| {
+                format!("Failed to prepare task directory '{}'", task_dir.display())
+            })?;
 
         // コンテストメタがあればファイル名を更新して再保存する
         if let Some(fname) = copied_file {
@@ -271,10 +273,7 @@ mod tests {
 
     #[test]
     fn infer_task_id_yukicoder() {
-        assert_eq!(
-            infer_task_id("https://yukicoder.me/problems/no/42"),
-            "42"
-        );
+        assert_eq!(infer_task_id("https://yukicoder.me/problems/no/42"), "42");
     }
 
     #[test]
@@ -285,9 +284,7 @@ mod tests {
     #[test]
     fn infer_task_id_aoj_description_jsp() {
         assert_eq!(
-            infer_task_id(
-                "https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=ITP1_1_A"
-            ),
+            infer_task_id("https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=ITP1_1_A"),
             "ITP1_1_A"
         );
     }
@@ -295,9 +292,7 @@ mod tests {
     #[test]
     fn infer_task_id_aoj_description_jsp_with_extra_param() {
         assert_eq!(
-            infer_task_id(
-                "https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=0001&lang=en"
-            ),
+            infer_task_id("https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=0001&lang=en"),
             "0001"
         );
     }

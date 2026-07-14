@@ -37,10 +37,7 @@ pub fn is_url(url: &str) -> bool {
 }
 
 pub fn is_contest_url(url: &str) -> bool {
-    is_url(url)
-        && (url.contains("/courses/")
-            || url.contains("/volumes/")
-            || is_challenge_url(url))
+    is_url(url) && (url.contains("/courses/") || url.contains("/volumes/") || is_challenge_url(url))
 }
 
 pub fn is_volume_url(url: &str) -> bool {
@@ -186,10 +183,7 @@ struct ApiChallengeProblem {
 ///    各トピックの `_links.self.href` 末尾からトピック数値 ID を抽出する。
 /// 3. 各トピックに対して `GET /topics/{topicId}/problems` で問題一覧を取得し、
 ///    `_links.self.href` 末尾から問題 ID 文字列・`name` を得る。
-pub async fn fetch_contest(
-    url: &str,
-    client: &reqwest::Client,
-) -> Result<ContestMeta, AppError> {
+pub async fn fetch_contest(url: &str, client: &reqwest::Client) -> Result<ContestMeta, AppError> {
     if is_volume_url(url) {
         return fetch_volume(url, client).await;
     }
@@ -213,9 +207,7 @@ pub async fn fetch_contest(
         .courses
         .into_iter()
         .find(|c| c.short_name.eq_ignore_ascii_case(&short_name))
-        .ok_or_else(|| {
-            AppError::SampleParse(format!("AOJ course '{short_name}' not found"))
-        })?;
+        .ok_or_else(|| AppError::SampleParse(format!("AOJ course '{short_name}' not found")))?;
 
     // ── Step 2: コースのトピック一覧を取得 ──
     let topics_url = format!("{JUDGE_API}/courses/{}/topics", course.id);
@@ -247,16 +239,11 @@ pub async fn fetch_contest(
             .to_string();
 
         let problems_url = format!("{JUDGE_API}/topics/{topic_id}/problems");
-        let problems_resp: ApiTopicProblemsResponse = match client
-            .get(&problems_url)
-            .send()
-            .await?
-            .json()
-            .await
-        {
-            Ok(r) => r,
-            Err(_) => continue, // トピックの問題取得に失敗しても続行
-        };
+        let problems_resp: ApiTopicProblemsResponse =
+            match client.get(&problems_url).send().await?.json().await {
+                Ok(r) => r,
+                Err(_) => continue, // トピックの問題取得に失敗しても続行
+            };
 
         for problem in problems_resp.embedded.problems {
             // `_links.self.href` 末尾のセグメントが問題 ID 文字列（例: "ITP1_1_A"）
@@ -295,10 +282,7 @@ pub async fn fetch_contest(
 /// # 手順
 /// 1. `GET /challenges` でカテゴリ一覧を取得し、対象 middleCls の `numberOfProblems` を得る。
 /// 2. `GET /problems?largeCls={L}&middleCls={M}&page=0&size={numberOfProblems}` で全問題を取得する。
-async fn fetch_challenge(
-    url: &str,
-    client: &reqwest::Client,
-) -> Result<ContestMeta, AppError> {
+async fn fetch_challenge(url: &str, client: &reqwest::Client) -> Result<ContestMeta, AppError> {
     let (large_id, middle_id) = extract_challenge_ids(url)?;
 
     // ── Step 1: /challenges から numberOfProblems を取得 ──
@@ -318,17 +302,10 @@ async fn fetch_challenge(
             lg.middle_cls
                 .iter()
                 .find(|md| md.id.eq_ignore_ascii_case(&middle_id))
-                .map(|md| {
-                    (
-                        format!("{} - {}", lg.title, md.id),
-                        md.number_of_problems,
-                    )
-                })
+                .map(|md| (format!("{} - {}", lg.title, md.id), md.number_of_problems))
         })
         .ok_or_else(|| {
-            AppError::SampleParse(format!(
-                "AOJ challenge '{large_id}/{middle_id}' not found"
-            ))
+            AppError::SampleParse(format!("AOJ challenge '{large_id}/{middle_id}' not found"))
         })?;
 
     // ── Step 2: 全問題を一括取得 ──
@@ -342,10 +319,10 @@ async fn fetch_challenge(
         .json()
         .await
         .map_err(|e| {
-            AppError::SampleParse(format!(
-                "Failed to fetch problems for AOJ challenge '{large_id}/{middle_id}': {e}"
-            ))
-        })?;
+        AppError::SampleParse(format!(
+            "Failed to fetch problems for AOJ challenge '{large_id}/{middle_id}': {e}"
+        ))
+    })?;
 
     let tasks = problems
         .into_iter()
@@ -373,25 +350,21 @@ async fn fetch_challenge(
 /// # 手順
 /// 1. `GET /problems/volumes/{vol_no}?page=0&size=1` で `numberOfProblems` を取得する。
 /// 2. `GET /problems/volumes/{vol_no}?page=0&size={numberOfProblems}` で全問題を一括取得する。
-async fn fetch_volume(
-    url: &str,
-    client: &reqwest::Client,
-) -> Result<ContestMeta, AppError> {
+async fn fetch_volume(url: &str, client: &reqwest::Client) -> Result<ContestMeta, AppError> {
     let vol_no = extract_volume_id(url)?;
 
     // ── Step 1: 問題数を先読み ──
     let probe_url = format!("{JUDGE_API}/problems/volumes/{vol_no}?page=0&size=1");
-    let probe: ApiVolumeResponse = client
-        .get(&probe_url)
-        .send()
-        .await?
-        .json()
-        .await
-        .map_err(|_| {
-            AppError::SampleParse(format!(
-                "Failed to fetch AOJ volume {vol_no} metadata"
-            ))
-        })?;
+    let probe: ApiVolumeResponse =
+        client
+            .get(&probe_url)
+            .send()
+            .await?
+            .json()
+            .await
+            .map_err(|_| {
+                AppError::SampleParse(format!("Failed to fetch AOJ volume {vol_no} metadata"))
+            })?;
 
     let count = probe.number_of_problems.max(1);
 
@@ -564,18 +537,17 @@ pub async fn fetch_contest_list(
         .await
         .map_err(|e| AppError::SampleParse(format!("Failed to fetch AOJ courses: {e}")))?;
 
-    let course_contests =
-        courses_resp
-            .courses
-            .into_iter()
-            .map(|c| super::model::SimpleContest {
-                id: c.short_name.clone(),
-                name: c.name,
-                url: format!(
-                    "https://onlinejudge.u-aizu.ac.jp/courses/lesson/2/{}/1",
-                    c.short_name
-                ),
-            });
+    let course_contests = courses_resp
+        .courses
+        .into_iter()
+        .map(|c| super::model::SimpleContest {
+            id: c.short_name.clone(),
+            name: c.name,
+            url: format!(
+                "https://onlinejudge.u-aizu.ac.jp/courses/lesson/2/{}/1",
+                c.short_name
+            ),
+        });
 
     // ── チャレンジ一覧（largeCls/middleCls を展開して各 middleCls を 1 コンテストとして扱う）──
     let challenges_resp: ApiChallengesResponse = challenges_res?
@@ -583,24 +555,21 @@ pub async fn fetch_contest_list(
         .await
         .map_err(|e| AppError::SampleParse(format!("Failed to fetch AOJ challenges: {e}")))?;
 
-    let challenge_contests =
-        challenges_resp
-            .large_cls
+    let challenge_contests = challenges_resp.large_cls.into_iter().flat_map(|large| {
+        let large_id = large.id.clone();
+        let large_title = large.title.clone();
+        large
+            .middle_cls
             .into_iter()
-            .flat_map(|large| {
-                let large_id = large.id.clone();
-                let large_title = large.title.clone();
-                large.middle_cls.into_iter().map(move |middle| {
-                    super::model::SimpleContest {
-                        id: format!("{}/{}", large_id, middle.id),
-                        name: format!("{} - {}", large_title, middle.id),
-                        url: format!(
-                            "https://onlinejudge.u-aizu.ac.jp/challenges/sources/{}/{}",
-                            large_id, middle.id
-                        ),
-                    }
-                })
-            });
+            .map(move |middle| super::model::SimpleContest {
+                id: format!("{}/{}", large_id, middle.id),
+                name: format!("{} - {}", large_title, middle.id),
+                url: format!(
+                    "https://onlinejudge.u-aizu.ac.jp/challenges/sources/{}/{}",
+                    large_id, middle.id
+                ),
+            })
+    });
 
     let contests: Vec<super::model::SimpleContest> =
         course_contests.chain(challenge_contests).collect();
@@ -616,9 +585,7 @@ mod tests {
 
     #[test]
     fn is_url_problem() {
-        assert!(is_url(
-            "https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A"
-        ));
+        assert!(is_url("https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A"));
     }
 
     #[test]
@@ -686,10 +653,9 @@ mod tests {
 
     #[test]
     fn extract_challenge_ids_basic() {
-        let (large, middle) = extract_challenge_ids(
-            "https://onlinejudge.u-aizu.ac.jp/challenges/sources/JOI/Prelim",
-        )
-        .unwrap();
+        let (large, middle) =
+            extract_challenge_ids("https://onlinejudge.u-aizu.ac.jp/challenges/sources/JOI/Prelim")
+                .unwrap();
         assert_eq!(large, "JOI");
         assert_eq!(middle, "Prelim");
     }
@@ -706,10 +672,9 @@ mod tests {
 
     #[test]
     fn extract_challenge_ids_trailing_slash() {
-        let (large, middle) = extract_challenge_ids(
-            "https://onlinejudge.u-aizu.ac.jp/challenges/sources/PCK/Final/",
-        )
-        .unwrap();
+        let (large, middle) =
+            extract_challenge_ids("https://onlinejudge.u-aizu.ac.jp/challenges/sources/PCK/Final/")
+                .unwrap();
         assert_eq!(large, "PCK");
         assert_eq!(middle, "Final");
     }
@@ -722,10 +687,8 @@ mod tests {
 
     #[test]
     fn extract_challenge_ids_missing_middle() {
-        let err = extract_challenge_ids(
-            "https://onlinejudge.u-aizu.ac.jp/challenges/sources/JOI",
-        )
-        .unwrap_err();
+        let err = extract_challenge_ids("https://onlinejudge.u-aizu.ac.jp/challenges/sources/JOI")
+            .unwrap_err();
         assert!(matches!(err, AppError::UnsupportedUrl(_)));
     }
 
@@ -754,10 +717,7 @@ mod tests {
 
     #[test]
     fn extract_problem_id_from_problems_path() {
-        let id = extract_problem_id(
-            "https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A",
-        )
-        .unwrap();
+        let id = extract_problem_id("https://onlinejudge.u-aizu.ac.jp/problems/ITP1_1_A").unwrap();
         assert_eq!(id, "ITP1_1_A");
     }
 
@@ -791,19 +751,15 @@ mod tests {
 
     #[test]
     fn extract_volume_id_challenges_url() {
-        let id = extract_volume_id(
-            "https://onlinejudge.u-aizu.ac.jp/challenges/volumes/1",
-        )
-        .unwrap();
+        let id =
+            extract_volume_id("https://onlinejudge.u-aizu.ac.jp/challenges/volumes/1").unwrap();
         assert_eq!(id, "1");
     }
 
     #[test]
     fn extract_volume_id_trailing_slash() {
-        let id = extract_volume_id(
-            "https://onlinejudge.u-aizu.ac.jp/challenges/volumes/20/",
-        )
-        .unwrap();
+        let id =
+            extract_volume_id("https://onlinejudge.u-aizu.ac.jp/challenges/volumes/20/").unwrap();
         assert_eq!(id, "20");
     }
 
@@ -817,20 +773,15 @@ mod tests {
 
     #[test]
     fn extract_course_id_lesson_url() {
-        let id = extract_course_id(
-            "https://onlinejudge.u-aizu.ac.jp/courses/lesson/2/ITP1/1",
-        )
-        .unwrap();
+        let id =
+            extract_course_id("https://onlinejudge.u-aizu.ac.jp/courses/lesson/2/ITP1/1").unwrap();
         assert_eq!(id, "ITP1");
     }
 
     #[test]
     fn extract_course_id_short_path_falls_back_to_first() {
         // /courses/{type} のように短い場合は先頭セグメントを返す
-        let id = extract_course_id(
-            "https://onlinejudge.u-aizu.ac.jp/courses/lesson",
-        )
-        .unwrap();
+        let id = extract_course_id("https://onlinejudge.u-aizu.ac.jp/courses/lesson").unwrap();
         assert_eq!(id, "lesson");
     }
 

@@ -86,10 +86,7 @@ async fn api_get<T: serde::de::DeserializeOwned>(
 
 // ─── コンテスト取得 ─────────────────────────────────────────────────
 
-pub async fn fetch_contest(
-    url: &str,
-    client: &reqwest::Client,
-) -> Result<ContestMeta, AppError> {
+pub async fn fetch_contest(url: &str, client: &reqwest::Client) -> Result<ContestMeta, AppError> {
     let contest_id = extract_contest_id(url)?;
     let api_url = format!("{API_BASE}/contest/id/{contest_id}");
 
@@ -169,7 +166,9 @@ fn inner_text(el: scraper::ElementRef) -> String {
     use scraper::node::Node;
 
     /// ブロック要素として扱うタグ名（内容の後に \n を挿入する）。
-    const BLOCK_TAGS: &[&str] = &["div", "p", "li", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6"];
+    const BLOCK_TAGS: &[&str] = &[
+        "div", "p", "li", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6",
+    ];
 
     fn traverse(node: &scraper::ElementRef, buf: &mut String) {
         for child in node.children() {
@@ -213,10 +212,7 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, String> {
     let mut samples = Vec::new();
 
     for sample_div in document.select(&sample_sel) {
-        let pres: Vec<String> = sample_div
-            .select(&pre_sel)
-            .map(inner_text)
-            .collect();
+        let pres: Vec<String> = sample_div.select(&pre_sel).map(inner_text).collect();
 
         // 各 div.sample に <pre>入力</pre> <pre>出力</pre> が含まれる
         if pres.len() >= 2 {
@@ -261,7 +257,7 @@ pub async fn fetch_contest_list(
     client: &reqwest::Client,
 ) -> Result<Vec<super::model::SimpleContest>, AppError> {
     let url = "https://yukicoder.me/api/v1/contest/past";
-    
+
     #[derive(Debug, serde::Deserialize)]
     struct YukiContest {
         #[serde(rename = "Id")]

@@ -107,10 +107,7 @@ fn extract_contest_id_legacy(url: &str) -> Result<String, AppError> {
 /// コンテスト URL からタスク一覧を含むメタデータを取得する。
 ///
 /// 旧サブドメイン形式 URL が渡された場合は自動的に現行形式へ正規化する。
-pub async fn fetch_contest(
-    url: &str,
-    client: &reqwest::Client,
-) -> Result<ContestMeta, AppError> {
+pub async fn fetch_contest(url: &str, client: &reqwest::Client) -> Result<ContestMeta, AppError> {
     let url = &normalize_url(url);
 
     // コンテスト ID を URL から抽出
@@ -352,7 +349,9 @@ fn inner_text(el: scraper::ElementRef) -> String {
     use scraper::node::Node;
 
     /// ブロック要素として扱うタグ名（内容の後に \n を挿入する）。
-    const BLOCK_TAGS: &[&str] = &["div", "p", "li", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6"];
+    const BLOCK_TAGS: &[&str] = &[
+        "div", "p", "li", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6",
+    ];
 
     fn traverse(node: &scraper::ElementRef, buf: &mut String) {
         for child in node.children() {
@@ -457,11 +456,14 @@ pub async fn fetch_contest_list(
                 .get("start_epoch_second")
                 .and_then(|v| v.as_i64())
                 .unwrap_or(0);
-            contests.push((epoch, super::model::SimpleContest {
-                id: id.to_string(),
-                name: title.to_string(),
-                url: format!("https://atcoder.jp/contests/{}", id),
-            }));
+            contests.push((
+                epoch,
+                super::model::SimpleContest {
+                    id: id.to_string(),
+                    name: title.to_string(),
+                    url: format!("https://atcoder.jp/contests/{}", id),
+                },
+            ));
         }
     }
 
@@ -483,9 +485,7 @@ mod tests {
 
     #[test]
     fn is_url_problem() {
-        assert!(is_url(
-            "https://atcoder.jp/contests/abc001/tasks/abc001_a"
-        ));
+        assert!(is_url("https://atcoder.jp/contests/abc001/tasks/abc001_a"));
     }
 
     #[test]
@@ -508,9 +508,7 @@ mod tests {
     #[test]
     fn is_contest_url_true_for_tasks_list() {
         // /tasks 末尾（タスク一覧ページ）はコンテスト URL として扱う
-        assert!(is_contest_url(
-            "https://atcoder.jp/contests/abc001/tasks"
-        ));
+        assert!(is_contest_url("https://atcoder.jp/contests/abc001/tasks"));
     }
 
     #[test]
@@ -528,9 +526,7 @@ mod tests {
     #[test]
     fn is_problem_url_false_for_tasks_list() {
         // /tasks 末尾はタスク一覧ページなので問題 URL ではない
-        assert!(!is_problem_url(
-            "https://atcoder.jp/contests/abc001/tasks"
-        ));
+        assert!(!is_problem_url("https://atcoder.jp/contests/abc001/tasks"));
     }
 
     // ─── URL 判定（旧サブドメイン形式） ──────────────────────────
@@ -547,9 +543,7 @@ mod tests {
 
     #[test]
     fn is_url_legacy_problem() {
-        assert!(is_url(
-            "https://abc001.contest.atcoder.jp/tasks/abc001_a"
-        ));
+        assert!(is_url("https://abc001.contest.atcoder.jp/tasks/abc001_a"));
     }
 
     #[test]
@@ -632,10 +626,7 @@ mod tests {
 
     #[test]
     fn extract_contest_id_from_problem_url() {
-        let id = extract_contest_id(
-            "https://atcoder.jp/contests/abc001/tasks/abc001_a",
-        )
-        .unwrap();
+        let id = extract_contest_id("https://atcoder.jp/contests/abc001/tasks/abc001_a").unwrap();
         assert_eq!(id, "abc001");
     }
 
@@ -653,10 +644,7 @@ mod tests {
 
     #[test]
     fn extract_contest_id_legacy_problem() {
-        let id = extract_contest_id(
-            "https://abc001.contest.atcoder.jp/tasks/abc001_a",
-        )
-        .unwrap();
+        let id = extract_contest_id("https://abc001.contest.atcoder.jp/tasks/abc001_a").unwrap();
         assert_eq!(id, "abc001");
     }
 
@@ -728,7 +716,10 @@ mod tests {
 </table>
 "#;
         let tasks = parse_task_table(html, "abc001").unwrap();
-        assert_eq!(tasks[0].url, "https://atcoder.jp/contests/abc001/tasks/abc001_a");
+        assert_eq!(
+            tasks[0].url,
+            "https://atcoder.jp/contests/abc001/tasks/abc001_a"
+        );
     }
 
     #[test]
@@ -884,7 +875,10 @@ mod tests {
         let err = parse_samples(html).unwrap_err();
         assert!(matches!(err, AppError::SampleParse(_)));
         let msg = err.to_string();
-        assert!(msg.contains("2") && msg.contains("1"), "エラーメッセージに件数が含まれること: {msg}");
+        assert!(
+            msg.contains("2") && msg.contains("1"),
+            "エラーメッセージに件数が含まれること: {msg}"
+        );
     }
 
     #[test]

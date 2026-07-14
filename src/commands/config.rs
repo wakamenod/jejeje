@@ -1,5 +1,5 @@
 use crate::config::Config;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 /// `je config [key] [value]` — 設定の表示・変更。
 ///
@@ -76,7 +76,10 @@ mod tests {
     fn get_template_dir_default() {
         let config = default_config();
         // デフォルトは ~/.config/jejeje/templates
-        let expected = config.template_dir.clone().unwrap_or_else(|| "(none)".to_string());
+        let expected = config
+            .template_dir
+            .clone()
+            .unwrap_or_else(|| "(none)".to_string());
         assert_eq!(get_value(&config, "template_dir").unwrap(), expected);
     }
 

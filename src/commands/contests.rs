@@ -1,5 +1,5 @@
 use crate::commands::prepare::build_client;
-use crate::judge::{fetch_contest_list, JudgeKind};
+use crate::judge::{JudgeKind, fetch_contest_list};
 use owo_colors::{OwoColorize, Stream};
 
 pub async fn run(judge_str: String, limit: Option<usize>) -> anyhow::Result<()> {
@@ -14,7 +14,9 @@ pub async fn run(judge_str: String, limit: Option<usize>) -> anyhow::Result<()> 
 
     println!(
         "Fetching contest list for {}...",
-        judge.as_str().if_supports_color(Stream::Stdout, |s| s.cyan())
+        judge
+            .as_str()
+            .if_supports_color(Stream::Stdout, |s| s.cyan())
     );
     let mut contests = fetch_contest_list(&judge, &client).await?;
     if let Some(n) = limit {

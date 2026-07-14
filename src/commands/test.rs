@@ -136,18 +136,10 @@ pub async fn run(
             }
             Verdict::Wa => {
                 println!("{label}: {} ({elapsed_ms}ms)", verdict.display());
-                print_diff(
-                    &input,
-                    &expected,
-                    outcome.actual.as_deref().unwrap_or(""),
-                );
+                print_diff(&input, &expected, outcome.actual.as_deref().unwrap_or(""));
             }
             Verdict::Tle => {
-                println!(
-                    "{label}: {} (>{:.0}ms)",
-                    verdict.display(),
-                    tle * 1000.0
-                );
+                println!("{label}: {} (>{:.0}ms)", verdict.display(), tle * 1000.0);
             }
             Verdict::Re => {
                 println!("{label}: {} ({elapsed_ms}ms)", verdict.display());
@@ -248,7 +240,12 @@ async fn execute(cmd: &str, input: &str, time_limit: Duration) -> Result<TestOut
 /// `epsilon` が指定されている場合は浮動小数点の絶対誤差・相対誤差で比較する。
 /// 改行コード (`\r\n` → `\n`) は常に正規化する。
 /// `trim_trailing_whitespace` が true の場合、各行の末尾空白を除去してから比較する。
-fn compare(actual: &str, expected: &str, epsilon: Option<f64>, trim_trailing_whitespace: bool) -> bool {
+fn compare(
+    actual: &str,
+    expected: &str,
+    epsilon: Option<f64>,
+    trim_trailing_whitespace: bool,
+) -> bool {
     // \r\n → \n の正規化（常時適用）
     let actual_owned;
     let expected_owned;
@@ -269,13 +266,21 @@ fn compare(actual: &str, expected: &str, epsilon: Option<f64>, trim_trailing_whi
     let actual_ls;
     let expected_ls;
     let actual = if trim_trailing_whitespace {
-        actual_ls = actual.lines().map(str::trim_end).collect::<Vec<_>>().join("\n");
+        actual_ls = actual
+            .lines()
+            .map(str::trim_end)
+            .collect::<Vec<_>>()
+            .join("\n");
         actual_ls.as_str()
     } else {
         actual
     };
     let expected = if trim_trailing_whitespace {
-        expected_ls = expected.lines().map(str::trim_end).collect::<Vec<_>>().join("\n");
+        expected_ls = expected
+            .lines()
+            .map(str::trim_end)
+            .collect::<Vec<_>>()
+            .join("\n");
         expected_ls.as_str()
     } else {
         expected

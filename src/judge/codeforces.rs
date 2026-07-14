@@ -32,10 +32,7 @@ pub fn is_contest_url(url: &str) -> bool {
 
 // ─── コンテスト取得 ─────────────────────────────────────────────────
 
-pub async fn fetch_contest(
-    url: &str,
-    client: &reqwest::Client,
-) -> Result<ContestMeta, AppError> {
+pub async fn fetch_contest(url: &str, client: &reqwest::Client) -> Result<ContestMeta, AppError> {
     let contest_id = extract_contest_id(url)?;
     let is_gym = url.contains("/gym/");
     let base_path = if is_gym { "gym" } else { "contest" };
@@ -184,7 +181,9 @@ fn inner_text(el: scraper::ElementRef) -> String {
     use scraper::node::Node;
 
     /// ブロック要素として扱うタグ名（内容の後に \n を挿入する）。
-    const BLOCK_TAGS: &[&str] = &["div", "p", "li", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6"];
+    const BLOCK_TAGS: &[&str] = &[
+        "div", "p", "li", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6",
+    ];
 
     fn traverse(node: &scraper::ElementRef, buf: &mut String) {
         for child in node.children() {
@@ -267,7 +266,7 @@ pub async fn fetch_contest_list(
     client: &reqwest::Client,
 ) -> Result<Vec<super::model::SimpleContest>, AppError> {
     let url = "https://codeforces.com/api/contest.list?gym=false";
-    
+
     #[derive(Debug, serde::Deserialize)]
     struct CfContestListResponse {
         status: String,
@@ -287,13 +286,18 @@ pub async fn fetch_contest_list(
         .await?
         .json()
         .await
-        .map_err(|e| AppError::SampleParse(format!("Failed to fetch Codeforces contests: {}", e)))?;
+        .map_err(|e| {
+            AppError::SampleParse(format!("Failed to fetch Codeforces contests: {}", e))
+        })?;
 
     if resp.status != "OK" {
-        return Err(AppError::SampleParse("Codeforces API status was not OK".to_string()));
+        return Err(AppError::SampleParse(
+            "Codeforces API status was not OK".to_string(),
+        ));
     }
 
-    let contests = resp.result
+    let contests = resp
+        .result
         .into_iter()
         .map(|c| super::model::SimpleContest {
             id: c.id.to_string(),
@@ -359,8 +363,7 @@ mod tests {
 
     #[test]
     fn extract_contest_id_from_problem_url() {
-        let id =
-            extract_contest_id("https://codeforces.com/contest/1234/problem/A").unwrap();
+        let id = extract_contest_id("https://codeforces.com/contest/1234/problem/A").unwrap();
         assert_eq!(id, "1234");
     }
 
@@ -539,7 +542,10 @@ mod tests {
 "#;
         let samples = parse_samples(html).unwrap();
         assert_eq!(samples.len(), 1);
-        assert_eq!(samples[0].input, "7\n-789\n1299\n1300\n1399\n1400\n1679\n2300\n");
+        assert_eq!(
+            samples[0].input,
+            "7\n-789\n1299\n1300\n1399\n1400\n1679\n2300\n"
+        );
         assert_eq!(samples[0].output, "YES\nYES\nNO\nYES\nNO\nYES\nYES\n");
     }
 
@@ -586,7 +592,8 @@ mod tests {
 
     #[test]
     fn parse_contest_name_found() {
-        let html = r#"<html><body><div class="contest-name">Codeforces Round #750</div></body></html>"#;
+        let html =
+            r#"<html><body><div class="contest-name">Codeforces Round #750</div></body></html>"#;
         let name = parse_contest_name(html).unwrap();
         assert_eq!(name, "Codeforces Round #750");
     }

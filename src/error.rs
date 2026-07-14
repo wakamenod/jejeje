@@ -95,8 +95,7 @@ mod tests {
 
     #[test]
     fn json_error_display() {
-        let json_err = serde_json::from_str::<serde_json::Value>("invalid json")
-            .unwrap_err();
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid json").unwrap_err();
         let err = AppError::Json(json_err);
         assert!(err.to_string().starts_with("JSON error:"));
     }
