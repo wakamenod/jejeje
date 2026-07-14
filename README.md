@@ -322,8 +322,9 @@ cargo test --test integration_prepare atcoder -- --ignored
   - `tests/integration_prepare.rs` — URL 直接指定・ID 直接解決・曖昧検索の全 13 ケース
   - `tests/integration_contests.rs` — コンテスト一覧取得・引数バリデーションの全 8 ケース
   - `#[ignore]` で通常 CI から除外し、`--ignored` フラグで明示実行
-- [ ] GitHub Actions による CI の設定
-- [ ] `cargo clippy` / `cargo fmt` の CI チェック
+- [x] GitHub Actions による CI の設定 (`.github/workflows/ci.yml`)
+- [x] `cargo clippy` / `cargo fmt` の CI チェック
+- [x] タグプッシュ時の自動リリース (`.github/workflows/release.yml`) — Linux / macOS Universal / Windows バイナリを GitHub Release に添付
 
 #### ドキュメント
 
