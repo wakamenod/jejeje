@@ -141,6 +141,7 @@ jobs:
       - name: Upload to GitHub Release
         uses: ncipollo/release-action@v1
         with:
+          tag: ${{ env.RELEASE_TAG }}
           artifacts: ${{ env.ARCHIVE }}
           allowUpdates: true
           draft: false

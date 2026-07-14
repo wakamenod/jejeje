@@ -201,6 +201,58 @@ cargo test --test integration_prepare atcoder -- --ignored
 | 曖昧検索 0 件 | エラー確認 | `"zzzznonexistent99999"` |
 | contests 各ジャッジ | 一覧取得 | `atcoder` / `codeforces` / `yukicoder` / `aoj` |
 
+## CI / リリース
+
+### CI (`.github/workflows/ci.yml`)
+
+`main` ブランチへの push および pull request で自動実行されます。
+
+```
+fmt-check → clippy → test
+```
+
+ローカルで同じチェックを実行するには:
+
+```bash
+just ci
+```
+
+### リリース (`.github/workflows/release.yml`)
+
+`v*` 形式のタグを push すると自動的に起動し、テスト通過後に 3 プラットフォームのバイナリを
+GitHub Release に添付します。
+
+| プラットフォーム | アーカイブ |
+|---|---|
+| Linux (x86_64) | `je-<tag>-linux-x86_64.tar.gz` |
+| macOS (Universal Binary) | `je-<tag>-macos-universal.tar.gz` |
+| Windows (x86_64) | `je-<tag>-windows-x86_64.zip` |
+
+#### タグによるリリース（通常フロー）
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+#### 手動再実行
+
+ワークフローは **リポジトリへの write 権限を持つユーザー**のみ実行できます（オーナー・コラボレーター）。read 権限のみのユーザーは実行できません。
+
+**GitHub UI から実行する場合:**
+
+1. リポジトリの **Actions** タブを開く
+2. 左サイドバーから **Release** をクリック
+3. **Run workflow** ボタンをクリック
+4. Branch: `main`、tag フィールドに対象タグ（例: `v0.1.0`）を入力
+5. 緑の **Run workflow** ボタンで実行
+
+**CLI から実行する場合:**
+
+```bash
+gh workflow run release.yml --ref main --field tag=v0.1.0
+```
+
 ## 対応ジャッジ
 
 | ジャッジ | サンプル取得 | コンテスト取得 | コンテスト一覧 | 取得方式 |
