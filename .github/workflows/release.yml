@@ -132,10 +132,10 @@ jobs:
 
       # ── GitHub Release にアップロード ──
       - name: Upload to GitHub Release
-        uses: softproofer/action-gh-release@v2
+        uses: ncipollo/release-action@v1
         with:
-          files: ${{ env.ARCHIVE }}
+          artifacts: ${{ env.ARCHIVE }}
+          allowUpdates: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }} # v1.0.0-beta など
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
