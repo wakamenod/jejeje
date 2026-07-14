@@ -215,6 +215,7 @@ fn parse_task_table(html: &str, contest_id: &str) -> Result<Vec<TaskMeta>, AppEr
             id,
             name,
             url: task_url,
+            filename: None,
         });
     }
 

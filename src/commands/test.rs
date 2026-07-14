@@ -1,3 +1,4 @@
+use crate::meta;
 use anyhow::Result;
 use owo_colors::OwoColorize;
 use std::{
@@ -52,6 +53,25 @@ pub async fn run(
             "Test directory '{}' not found. Run `je prepare` first.",
             test_dir.display()
         );
+    }
+
+    // メタ情報の表示（取得できない場合は静かにスキップ）
+    if let Ok(cwd) = std::env::current_dir() {
+        if let Ok(contest_meta) = meta::load(&cwd) {
+            // CWD のディレクトリ名を task.id と照合して対応タスクを特定する
+            let dir_name = cwd
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_default();
+            if let Some(task) = contest_meta.tasks.iter().find(|t| t.id == dir_name) {
+                println!("{}: {}", "Title".dimmed(), task.name.bold());
+                println!("{}: {}", "URL  ".dimmed(), task.url);
+                if let Some(fname) = &task.filename {
+                    println!("{}: {}", "File ".dimmed(), fname.bold());
+                }
+                println!();
+            }
+        }
     }
 
     // テストファイル収集（*.in を昇順ソート）

@@ -106,6 +106,7 @@ fn parse_contest_problems(
             id: id.to_lowercase(),
             name,
             url: task_url,
+            filename: None,
         });
     }
 
