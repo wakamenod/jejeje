@@ -63,14 +63,13 @@ pub async fn run(url_or_query: String) -> Result<()> {
             })?;
 
         // コンテストメタがあればファイル名を更新して再保存する
-        if let Some(fname) = copied_file {
-            if let Ok(mut contest_meta) = meta::load(&cwd) {
-                if let Some(task) = contest_meta.tasks.iter_mut().find(|t| t.id == task_id) {
-                    task.filename = Some(fname);
-                    let root = meta::find_contest_root(&cwd).unwrap_or_else(|| cwd.clone());
-                    meta::save(&root, &contest_meta)?;
-                }
-            }
+        if let Some(fname) = copied_file
+            && let Ok(mut contest_meta) = meta::load(&cwd)
+            && let Some(task) = contest_meta.tasks.iter_mut().find(|t| t.id == task_id)
+        {
+            task.filename = Some(fname);
+            let root = meta::find_contest_root(&cwd).unwrap_or_else(|| cwd.clone());
+            meta::save(&root, &contest_meta)?;
         }
 
         println!("Done: {}", task_dir.display());
@@ -150,15 +149,15 @@ fn copy_template_all(task_dir: &Path, template_dir: &str) -> Result<Vec<String>>
 /// - `https://judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=ITP1_1_A` → `"ITP1_1_A"`
 fn infer_task_id(url: &str) -> String {
     // AOJ 旧形式: description.jsp?id=XXX
-    if url.contains("description.jsp") {
-        if let Some(id) = url.split("id=").nth(1).and_then(|s| s.split('&').next()) {
-            return id.to_string();
-        }
+    if url.contains("description.jsp")
+        && let Some(id) = url.split("id=").nth(1).and_then(|s| s.split('&').next())
+    {
+        return id.to_string();
     }
 
     url.trim_end_matches('/')
         .split('/')
-        .last()
+        .next_back()
         .unwrap_or("task")
         .to_string()
 }

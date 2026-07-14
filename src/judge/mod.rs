@@ -147,9 +147,9 @@ const FUZZY_DISPLAY_LIMIT: usize = 20;
 /// 0件 → エラー、1件 → URL 返却、複数件 → 候補表示+エラー を返す。
 ///
 /// ネットワーク非依存の純粋ロジック。`resolve_query` から分離されている。
-fn fuzzy_search_contests<'a>(
+fn fuzzy_search_contests(
     query: &str,
-    judges: &[(&'a str, Vec<SimpleContest>)],
+    judges: &[(&str, Vec<SimpleContest>)],
 ) -> Result<String, AppError> {
     let tokens: Vec<String> = query
         .to_lowercase()

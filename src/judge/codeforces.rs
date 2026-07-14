@@ -3,9 +3,9 @@
 //! # URL パターン
 //! - コンテスト: `https://codeforces.com/contest/{contest_id}`
 //! - 問題:       `https://codeforces.com/contest/{contest_id}/problem/{problem_id}`
-//!               `https://codeforces.com/problemset/problem/{contest_id}/{problem_id}`
+//!   `https://codeforces.com/problemset/problem/{contest_id}/{problem_id}`
 //! - Gym:        `https://codeforces.com/gym/{contest_id}`
-//!               `https://codeforces.com/gym/{contest_id}/problem/{problem_id}`
+//!   `https://codeforces.com/gym/{contest_id}/problem/{problem_id}`
 
 use super::model::{ContestMeta, SampleCase, TaskMeta};
 use crate::error::AppError;
