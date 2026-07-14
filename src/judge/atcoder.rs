@@ -272,11 +272,12 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
             .map(|h| h.text().collect::<String>())
             .unwrap_or_default();
 
-        // <pre> 内に <code> がネストされていても text() はすべての子孫テキストを連結する
+        // <pre> 内に <code> がネストされていても inner_text はすべての子テキストを連結する
+        // <br> タグによる改行も正しく \n へ変換される
         let pre_text = section
             .select(&pre_sel)
             .next()
-            .map(|p| normalize_pre_text(p.text().collect::<String>()))
+            .map(|p| normalize_pre_text(inner_text(p)))
             .unwrap_or_default();
 
         if heading.contains("入力例") || heading.contains("Sample Input") {
@@ -302,7 +303,7 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
             let pre_text = part
                 .select(&pre_sel)
                 .next()
-                .map(|p| normalize_pre_text(p.text().collect::<String>()))
+                .map(|p| normalize_pre_text(inner_text(p)))
                 .unwrap_or_default();
 
             if heading.contains("入力例") || heading.contains("Sample Input") {
@@ -334,6 +335,51 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
         .collect();
 
     Ok(samples)
+}
+
+/// `<pre>` 要素の内部テキストを取得する。
+///
+/// `scraper` の `.text()` はテキストノードのみを収集するため、
+/// `<br>` や `<div>` などによる改行が失われる。
+/// この関数はノードツリーを再帰的に走査し、以下のルールで `\n` を挿入する:
+///
+/// - `<br>` → `\n` を直接挿入
+/// - `<div>`, `<p>` などのブロック要素 → 内容を取得した後に `\n` を追加
+/// - `<code>`, `<span>` などのインライン要素 → 内容をそのまま取得
+/// - テキストノード → そのまま追加
+fn inner_text(el: scraper::ElementRef) -> String {
+    use scraper::node::Node;
+
+    /// ブロック要素として扱うタグ名（内容の後に \n を挿入する）。
+    const BLOCK_TAGS: &[&str] = &["div", "p", "li", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6"];
+
+    fn traverse(node: &scraper::ElementRef, buf: &mut String) {
+        for child in node.children() {
+            match child.value() {
+                Node::Text(t) => buf.push_str(t),
+                Node::Element(e) if e.name() == "br" => buf.push('\n'),
+                Node::Element(e) if BLOCK_TAGS.contains(&e.name()) => {
+                    if let Some(child_el) = scraper::ElementRef::wrap(child) {
+                        traverse(&child_el, buf);
+                    }
+                    // ブロック要素の末尾に改行を追加（まだ改行がない場合のみ）
+                    if !buf.ends_with('\n') {
+                        buf.push('\n');
+                    }
+                }
+                Node::Element(_) => {
+                    if let Some(child_el) = scraper::ElementRef::wrap(child) {
+                        traverse(&child_el, buf);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut buf = String::new();
+    traverse(&el, &mut buf);
+    buf
 }
 
 /// `<pre>` テキストの末尾改行を統一する。
@@ -791,6 +837,27 @@ mod tests {
 "#;
         let samples = parse_samples(html).unwrap();
         assert_eq!(samples[0].input, "1 2 3\n");
+        assert_eq!(samples[0].output, "6\n");
+    }
+
+    #[test]
+    fn parse_samples_br_newlines() {
+        // <pre> 内の改行が <br> で表現されている場合でも正しく複数行として取得できること。
+        let html = r#"
+<html><body>
+  <section>
+    <h3>入力例 1</h3>
+    <pre>3<br/>1 2 3</pre>
+  </section>
+  <section>
+    <h3>出力例 1</h3>
+    <pre>6</pre>
+  </section>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].input, "3\n1 2 3\n");
         assert_eq!(samples[0].output, "6\n");
     }
 

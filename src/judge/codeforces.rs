@@ -145,12 +145,12 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
 
     let inputs: Vec<String> = doc
         .select(&input_sel)
-        .map(|el| normalize_pre_text(el.text().collect::<String>()))
+        .map(|el| normalize_pre_text(inner_text(el)))
         .collect();
 
     let outputs: Vec<String> = doc
         .select(&output_sel)
-        .map(|el| normalize_pre_text(el.text().collect::<String>()))
+        .map(|el| normalize_pre_text(inner_text(el)))
         .collect();
 
     if inputs.is_empty() {
@@ -164,6 +164,59 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
         .zip(outputs)
         .map(|(input, output)| SampleCase { input, output })
         .collect())
+}
+
+/// `<pre>` 要素の内部テキストを取得する。
+///
+/// `scraper` の `.text()` はテキストノードのみを収集するため、
+/// `<br>` や `<div>` などによる改行が失われる。
+/// この関数はノードツリーを再帰的に走査し、以下のルールで `\n` を挿入する:
+///
+/// - `<br>` → `\n` を直接挿入
+/// - `<div>`, `<p>` などのブロック要素 → 内容を取得した後に `\n` を追加
+/// - `<code>`, `<span>` などのインライン要素 → 内容をそのまま取得
+/// - テキストノード → そのまま追加
+///
+/// Codeforces の実際の HTML 例:
+/// ```html
+/// <pre>
+///   <div class="test-example-line">7</div>
+///   <div class="test-example-line">-789</div>
+/// </pre>
+/// ```
+fn inner_text(el: scraper::ElementRef) -> String {
+    use scraper::node::Node;
+
+    /// ブロック要素として扱うタグ名（内容の後に \n を挿入する）。
+    const BLOCK_TAGS: &[&str] = &["div", "p", "li", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6"];
+
+    fn traverse(node: &scraper::ElementRef, buf: &mut String) {
+        for child in node.children() {
+            match child.value() {
+                Node::Text(t) => buf.push_str(t),
+                Node::Element(e) if e.name() == "br" => buf.push('\n'),
+                Node::Element(e) if BLOCK_TAGS.contains(&e.name()) => {
+                    if let Some(child_el) = scraper::ElementRef::wrap(child) {
+                        traverse(&child_el, buf);
+                    }
+                    // ブロック要素の末尾に改行を追加（まだ改行がない場合のみ）
+                    if !buf.ends_with('\n') {
+                        buf.push('\n');
+                    }
+                }
+                Node::Element(_) => {
+                    if let Some(child_el) = scraper::ElementRef::wrap(child) {
+                        traverse(&child_el, buf);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut buf = String::new();
+    traverse(&el, &mut buf);
+    buf
 }
 
 /// `<pre>` テキストを正規化する。
@@ -455,6 +508,62 @@ mod tests {
         let samples = parse_samples(html).unwrap();
         assert_eq!(samples[0].input, "42\n");
         assert_eq!(samples[0].output, "yes\n");
+    }
+
+    #[test]
+    fn parse_samples_div_test_example_line() {
+        // Codeforces の実際の HTML 構造: <pre> 内の各行が div.test-example-line で囲まれる。
+        // https://codeforces.com/contest/1669/problem/A などで確認された形式。
+        let html = r#"
+<html><body>
+<div class="sample-test">
+  <div class="input">
+    <div class="title">Input</div>
+    <pre>
+<div class="test-example-line test-example-line-even test-example-line-0">7</div><div class="test-example-line test-example-line-odd test-example-line-1">-789</div><div class="test-example-line test-example-line-even test-example-line-2">1299</div><div class="test-example-line test-example-line-odd test-example-line-3">1300</div><div class="test-example-line test-example-line-even test-example-line-4">1399</div><div class="test-example-line test-example-line-odd test-example-line-5">1400</div><div class="test-example-line test-example-line-even test-example-line-6">1679</div><div class="test-example-line test-example-line-odd test-example-line-7">2300</div></pre>
+  </div>
+  <div class="output">
+    <div class="title">Output</div>
+    <pre>
+<div class="test-example-line test-example-line-odd test-example-line-1">Division 4</div><div class="test-example-line test-example-line-even test-example-line-2">Division 4</div><div class="test-example-line test-example-line-odd test-example-line-3">Division 4</div><div class="test-example-line test-example-line-even test-example-line-4">Division 4</div><div class="test-example-line test-example-line-odd test-example-line-5">Division 3</div><div class="test-example-line test-example-line-even test-example-line-6">Division 2</div><div class="test-example-line test-example-line-odd test-example-line-7">Division 1</div></pre>
+  </div>
+</div>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(
+            samples[0].input,
+            "7\n-789\n1299\n1300\n1399\n1400\n1679\n2300\n"
+        );
+        assert_eq!(
+            samples[0].output,
+            "Division 4\nDivision 4\nDivision 4\nDivision 4\nDivision 3\nDivision 2\nDivision 1\n"
+        );
+    }
+
+    #[test]
+    fn parse_samples_br_newlines() {
+        // Codeforces の実際の HTML では <pre> 内の改行が <br> で表現される場合がある。
+        // scraper の .text() は <br> を無視するため inner_text() で明示的に \n へ変換する。
+        let html = r#"
+<html><body>
+<div class="sample-test">
+  <div class="input">
+    <div class="title">Input</div>
+    <pre>7<br/>-789<br/>1299<br/>1300<br/>1399<br/>1400<br/>1679<br/>2300</pre>
+  </div>
+  <div class="output">
+    <div class="title">Output</div>
+    <pre>YES<br/>YES<br/>NO<br/>YES<br/>NO<br/>YES<br/>YES</pre>
+  </div>
+</div>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].input, "7\n-789\n1299\n1300\n1399\n1400\n1679\n2300\n");
+        assert_eq!(samples[0].output, "YES\nYES\nNO\nYES\nNO\nYES\nYES\n");
     }
 
     #[test]

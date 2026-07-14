@@ -160,6 +160,51 @@ pub async fn fetch_samples(
     parse_samples(&html).map_err(AppError::SampleParse)
 }
 
+/// `<pre>` 要素の内部テキストを取得する。
+///
+/// `scraper` の `.text()` はテキストノードのみを収集するため、
+/// `<br>` や `<div>` などによる改行が失われる。
+/// この関数はノードツリーを再帰的に走査し、以下のルールで `\n` を挿入する:
+///
+/// - `<br>` → `\n` を直接挿入
+/// - `<div>`, `<p>` などのブロック要素 → 内容を取得した後に `\n` を追加
+/// - `<code>`, `<span>` などのインライン要素 → 内容をそのまま取得
+/// - テキストノード → そのまま追加
+fn inner_text(el: scraper::ElementRef) -> String {
+    use scraper::node::Node;
+
+    /// ブロック要素として扱うタグ名（内容の後に \n を挿入する）。
+    const BLOCK_TAGS: &[&str] = &["div", "p", "li", "tr", "td", "th", "h1", "h2", "h3", "h4", "h5", "h6"];
+
+    fn traverse(node: &scraper::ElementRef, buf: &mut String) {
+        for child in node.children() {
+            match child.value() {
+                Node::Text(t) => buf.push_str(t),
+                Node::Element(e) if e.name() == "br" => buf.push('\n'),
+                Node::Element(e) if BLOCK_TAGS.contains(&e.name()) => {
+                    if let Some(child_el) = scraper::ElementRef::wrap(child) {
+                        traverse(&child_el, buf);
+                    }
+                    // ブロック要素の末尾に改行を追加（まだ改行がない場合のみ）
+                    if !buf.ends_with('\n') {
+                        buf.push('\n');
+                    }
+                }
+                Node::Element(_) => {
+                    if let Some(child_el) = scraper::ElementRef::wrap(child) {
+                        traverse(&child_el, buf);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let mut buf = String::new();
+    traverse(&el, &mut buf);
+    buf
+}
+
 /// HTML 文字列から `div.sample` ブロックを解析してサンプルケースを返す。
 ///
 /// 各 `div.sample` ブロック内の `pre` タグを順に取得し、
@@ -175,7 +220,7 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, String> {
     for sample_div in document.select(&sample_sel) {
         let pres: Vec<String> = sample_div
             .select(&pre_sel)
-            .map(|el| el.text().collect::<String>())
+            .map(inner_text)
             .collect();
 
         // 各 div.sample に <pre>入力</pre> <pre>出力</pre> が含まれる
@@ -393,6 +438,25 @@ mod tests {
         assert_eq!(samples[0].output, "YES");
         assert_eq!(samples[1].input, "0");
         assert_eq!(samples[1].output, "NO");
+    }
+
+    #[test]
+    fn parse_samples_br_newlines() {
+        // <pre> 内の改行が <br> で表現されている場合でも正しく複数行として取得できること。
+        let html = r#"
+            <html><body>
+            <div class="sample" data-file="01_sample_01.txt">
+              <div class="paragraph">
+                <pre>3<br/>1 2 3</pre>
+                <pre>6</pre>
+              </div>
+            </div>
+            </body></html>
+        "#;
+        let samples = parse_samples(html).unwrap();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].input, "3\n1 2 3");
+        assert_eq!(samples[0].output, "6");
     }
 
     #[test]
