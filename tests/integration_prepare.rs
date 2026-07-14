@@ -17,7 +17,6 @@
 //! 過剰なリクエストを避けるため、各ジャッジあたり 2 ケース（コンテスト or 旧URL込み）に絞っている。
 
 use assert_cmd::Command;
-use predicates;
 use std::path::Path;
 use tempfile::TempDir;
 

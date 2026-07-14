@@ -34,9 +34,9 @@ pub fn find(start: &Path) -> Option<PathBuf> {
         if candidate.exists() {
             return Some(candidate);
         }
-        match current.parent() {
-            Some(parent) => current = parent.to_path_buf(),
-            None => return None,
+        {
+            let parent = current.parent()?;
+            current = parent.to_path_buf()
         }
     }
 }
