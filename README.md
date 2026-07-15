@@ -218,8 +218,6 @@ git push origin v0.1.0
 
 #### 手動再実行
 
-ワークフローは **リポジトリへの write 権限を持つユーザー**のみ実行できます（オーナー・コラボレーター）。read 権限のみのユーザーは実行できません。
-
 **GitHub UI から実行する場合:**
 
 1. リポジトリの **Actions** タブを開く
@@ -233,12 +231,3 @@ git push origin v0.1.0
 ```bash
 gh workflow run release.yml --ref main --field tag=v0.1.0
 ```
-
-## 対応ジャッジ
-
-| ジャッジ | サンプル取得 | コンテスト取得 | コンテスト一覧 | 取得方式 |
-|---|---|---|---|---|
-| AtCoder | ✅ | ✅ | ✅ | HTML スクレイピング / 一覧: [AtCoder Problems API](https://kenkoooo.com/atcoder/) |
-| Codeforces | ✅ | ✅ | ✅ | HTML スクレイピング / 一覧: 公式 REST API |
-| yukicoder | ✅ | ✅ | ✅ | サンプル: HTML スクレイピング / コンテスト・一覧: 公式 REST API |
-| AOJ | ✅ | ✅ | ✅ | 公式 REST API |
