@@ -1,11 +1,11 @@
 # je
 
-競技プログラミング向けのコマンドラインツール。サンプルケースの取得とテスト実行に特化した、シングルバイナリで動作する軽量ツールです。
+競技プログラミング向けのコマンドラインツール。
+サンプルケースの取得と取得したケースに対するテスト実行に特化した、シングルバイナリで動作する軽量ツールです。
 
 ## 特徴
 
 - **シングルバイナリ** — Python や Node.js などの実行環境不要
-- **ログイン・提出機能なし** — CAPTCHA 対応が必要な機能を意図的に省き、常に安定動作
 - **マルチジャッジ対応** — AtCoder / Codeforces / yukicoder / AOJ をサポート
 
 ## インストール
@@ -72,7 +72,7 @@ je prepare "beginner 300"   # → AtCoder Beginner Contest 300 を解決
 > テンプレートファイルはすでに存在する場合はスキップされるため、
 > 回答中のコードが上書きされることはありません。
 
-### テスト実行
+### サンプルケースのテスト実行
 
 ```bash
 # デフォルトコマンド (./a.out) でテスト
@@ -182,25 +182,6 @@ cargo test --test integration_contests -- --ignored
 cargo test --test integration_prepare atcoder -- --ignored
 ```
 
-テスト対象:
-
-| テスト | 種別 | 入力 |
-|---|---|---|
-| AtCoder コンテスト | `abc001` 全 4 問 | `atcoder.jp/contests/abc001` |
-| AtCoder 旧 URL | 単問 | `abc001.contest.atcoder.jp/tasks/abc001_1` |
-| Codeforces コンテスト | `contest/1` 全 3 問 | `codeforces.com/contest/1` |
-| Codeforces 単問 | Problem A | `codeforces.com/contest/1/problem/A` |
-| yukicoder コンテスト | `contests/1` | `yukicoder.me/contests/1` |
-| yukicoder 単問 | No.1 | `yukicoder.me/problems/no/1` |
-| AOJ コース | ITP1 全問 | `onlinejudge.u-aizu.ac.jp/courses/lesson/1/ITP1` |
-| AOJ 旧 URL | 単問 | `judge.u-aizu.ac.jp/onlinejudge/description.jsp?id=ITP1_1_A` |
-| 直接解決 AtCoder | ID 入力 | `abc001` |
-| 直接解決 Codeforces | ID 入力 | `cf1` |
-| 直接解決 AOJ | ID 入力 | `itp1` |
-| 曖昧検索 複数マッチ | エラー確認 | `"contest"` |
-| 曖昧検索 0 件 | エラー確認 | `"zzzznonexistent99999"` |
-| contests 各ジャッジ | 一覧取得 | `atcoder` / `codeforces` / `yukicoder` / `aoj` |
-
 ## CI / リリース
 
 ### CI (`.github/workflows/ci.yml`)
@@ -261,124 +242,3 @@ gh workflow run release.yml --ref main --field tag=v0.1.0
 | Codeforces | ✅ | ✅ | ✅ | HTML スクレイピング / 一覧: 公式 REST API |
 | yukicoder | ✅ | ✅ | ✅ | サンプル: HTML スクレイピング / コンテスト・一覧: 公式 REST API |
 | AOJ | ✅ | ✅ | ✅ | 公式 REST API |
-
----
-
-## TODO
-
-以下は今後の実装予定です。
-
-### 🔴 優先度高（コア機能）
-
-#### AtCoder スクレイパー実装 (`src/judge/atcoder.rs`)
-
-- [x] `fetch_samples`: 問題ページの `<section>` ブロックから入力例・出力例をパース
-  - [x] `<h3>` タグで "入力例" / "出力例" / "Sample Input" / "Sample Output" を検出
-  - [x] `<pre>` タグからサンプルテキストを抽出（`<pre><code>` ネスト構造にも対応）
-  - [x] 日本語・英語両対応
-  - [x] 末尾改行の正規化（`\n` 1 つに統一）
-  - [x] 入力例・出力例の件数不一致時にエラーを返す
-- [x] `fetch_contest`: タスク一覧ページ (`/contests/{id}/tasks`) のテーブルをパース
-  - [x] `#task-table tbody tr` からタスク ID・名前・URL を抽出
-- [x] `fetch_contest`: コンテストトップページからコンテスト名を取得
-- [x] 旧 URL 形式への対応 (`abc001.contest.atcoder.jp` 形式)
-- [x] リクエスト間の待機処理（過負荷防止、1 秒程度）
-
-#### Codeforces スクレイパー実装 (`src/judge/codeforces.rs`)
-
-- [x] `fetch_samples`: 問題ページの `<div class="sample-test">` からサンプルをパース
-  - [x] `div.input pre` と `div.output pre` を対応付け
-  - [x] `<div class="title">` を含む実際の HTML 構造に対応
-  - [x] 末尾改行の正規化（`\n` 1 つに統一）
-- [x] `fetch_contest`: コンテストページの `table.problems` からタスク一覧をパース
-- [x] Gym URL (`/gym/{id}`) の対応
-- [x] Problemset URL (`/problemset/problem/{id}/{id}`) の対応（URL 判定）
-- [x] リクエスト間の待機処理（過負荷防止、1 秒程度）
-
-#### yukicoder 実装 (`src/judge/yukicoder.rs`)
-
-- [x] `fetch_samples`: 問題ページの HTML をスクレイピングしてサンプルを取得
-  - `/api/v1/problems/{no}/file/in` は `BearerAuth` 必須で認証なしでは利用不可
-  - `div.sample > pre` からサンプル入出力を抽出（`pre[0]`=入力、`pre[1]`=出力）
-- [x] `fetch_contest`: `/api/v1/contest/id/{id}` のレスポンスからタスク一覧を組み立て
-  - `ProblemIdList` の各 ID に対して個別に問題情報を取得する処理
-- [x] API エラーレスポンスのハンドリング
-  - `AppError::ApiError { status, url, body }` バリアントを追加
-  - `fetch_contest` (コンテスト・問題取得) と `fetch_samples` (HTML 取得) で
-    HTTP 非成功ステータス時に `ApiError` を返す `api_get()` ヘルパーを導入
-
-#### AOJ API 実装 (`src/judge/aoj.rs`)
-
-- [x] `fetch_samples`: `judgedat.u-aizu.ac.jp/testcases/samples/{id}` で全サンプルを一括取得
-  - エンドポイントホストを `judgeapi` → `judgedat.u-aizu.ac.jp` に修正
-  - `/problems/{id}` でサンプル数を事前取得するロジックを廃止
-  - レスポンスは配列形式 `[{"problemId": "...", "serial": N, "in": "...", "out": "..."}, ...]`
-  - `ApiSample` のフィールド名を `input`/`output` → `in`/`out`（serde rename）に修正
-- [x] `fetch_contest`: コース API のレスポンス形式を確認・修正
-  - `GET /courses` でコース一覧を取得し `shortName` でフィルタ → 数値 `courseId` を取得
-  - `GET /courses/{courseId}/topics` (HAL 形式) で `_embedded.topics[]` を取得
-  - `GET /topics/{topicId}/problems` (HAL 形式) で `_embedded.problems[]` を取得
-  - 問題 ID / トピック ID は `_links.self.href` の末尾セグメントから抽出
-- [x] Volume URL への対応（`/volumes/{vol_no}` 形式）
-  - `is_contest_url` が `/volumes/` を含む URL を認識するよう拡張
-  - `extract_volume_id` ヘルパーで URL から Volume 番号を抽出
-  - `GET /problems/volumes/{vol_no}?page=0&size={n}` で全問題を一括取得
-  - `fetch_contest` が Volume URL を検出して `fetch_volume` に委譲
-
----
-
-### 🟡 優先度中
-
-#### `je prepare` の改善
-
-- [x] ~~コンテスト作成時の進捗表示の改善（タスクごとのダウンロード状況）~~ — 対応予定なし
-- [x] ~~すでにディレクトリが存在する場合の上書き確認プロンプト~~ — 対応予定なし
-- [x] ~~`--force` フラグによる強制上書きオプション~~ — 対応予定なし
-
-#### `je test` の改善
-
-- [ ] 実行コマンドが存在しない場合の分かりやすいエラーメッセージ
-- [ ] 特定のテストケースのみ実行するオプション（例: `je test 1 2`）
-- [ ] テスト結果の詳細表示モード（`--verbose`）
-- [x] 改行コード正規化（Windows の `\r\n` を `\n` に統一して比較）— 常時適用
-- [x] 末尾空白の正規化オプション — `--trim-trailing-whitespace` フラグで有効化
-
-#### エラーメッセージの改善
-
-- [ ] HTTP エラー時のステータスコードと URL を含むメッセージ
-- [ ] 対応外 URL に対してどのジャッジがサポートされているかを提示
-- [ ] ネットワーク到達不能時の分かりやすいメッセージ
-
----
-
-### 🟢 優先度低（将来対応）
-
-#### 追加機能
-
-- [ ] `je test` の並列実行オプション（`-j N`）
-- [ ] インタラクティブ問題のテスト（`je test --reactive <judge_command>`）
-- [ ] スペシャルジャッジ対応（`--judge-command` でカスタムチェッカーを指定）
-- [ ] ストレステスト補助（`je stress <generator> <brute_command>`）
-
-#### ユーザビリティ
-
-- [ ] シェル補完スクリプトの生成（`je completions bash/zsh/fish`）
-- [ ] `je config` での設定一覧のカラー表示
-- [ ] `je info` でタスクの URL をクリッカブル表示（OSC 8 ハイパーリンク）
-- [ ] コンテスト作成時に生成されたディレクトリへ `cd` するためのシェル関数の提供
-
-#### テスト・CI
-
-- [x] 各ジャッジスクレイパーのユニットテスト（HTML フィクスチャを使ったパーステスト）
-- [x] 統合テスト（実際の問題 URL に対するエンドツーエンドテスト）
-  - `tests/integration_prepare.rs` — URL 直接指定・ID 直接解決・曖昧検索の全 13 ケース
-  - `tests/integration_contests.rs` — コンテスト一覧取得・引数バリデーションの全 8 ケース
-  - `#[ignore]` で通常 CI から除外し、`--ignored` フラグで明示実行
-- [x] GitHub Actions による CI の設定 (`.github/workflows/ci.yml`)
-- [x] `cargo clippy` / `cargo fmt` の CI チェック
-- [x] タグプッシュ時の自動リリース (`.github/workflows/release.yml`) — Linux / macOS Universal / Windows バイナリを GitHub Release に添付
-
-#### ドキュメント
-
-- [ ] `je --help` の出力をより詳細に（使用例の追加）
-- [ ] 各ジャッジの対応 URL パターン一覧のドキュメント化
