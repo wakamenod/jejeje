@@ -1,0 +1,20 @@
+# cargo-release 設定
+# ドキュメント: https://github.com/crate-ci/cargo-release/blob/master/docs/reference.md
+
+# crates.io には公開しない（GitHub Releases でバイナリ配布するため）
+publish = false
+
+# タグフォーマット（GitHub Actions の release.yml が "v*" トリガーのため v プレフィックスを付ける）
+tag-name = "v{{version}}"
+
+# バージョン bump 後のコミットメッセージ
+pre-release-commit-message = "chore: release v{{version}}"
+
+# タグのアノテーションメッセージ
+tag-message = "v{{version}}"
+
+# バージョン bump コミットとタグを push する
+push = true
+
+# 確認プロンプトをスキップしない（デフォルト: false = 確認あり）
+# 自動化したい場合は `cargo release --no-confirm` を使う

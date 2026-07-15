@@ -70,11 +70,19 @@ test-all:
 install:
     cargo install --path .
 
-# 使い方: just release v0.1.0
-# タグを作成して push → GitHub Actions のリリースワークフローを起動
-release tag:
-    git tag {{tag}}
-    git push origin {{tag}}
+# Cargo.toml のバージョンを bump してタグを作成・push
+# → GitHub Actions のリリースワークフローを起動
+#
+# 使い方:
+#   just release patch   # 0.1.0 → 0.1.1
+#   just release minor   # 0.1.0 → 0.2.0
+#   just release major   # 0.1.0 → 1.0.0
+#   just release 0.2.0   # バージョンを直接指定
+#
+# ドライラン（実際には何もしない）:
+#   cargo release patch
+release level="patch":
+    cargo release {{level}} --execute
 
 # リリースワークフローを手動で再実行（既存タグに対して）
 # 使い方: just release-rerun v0.1.0
