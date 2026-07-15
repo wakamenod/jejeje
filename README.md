@@ -1,4 +1,8 @@
-# je
+# jejeje
+
+[English](README.en.md) | 日本語
+
+**J**udge & **E**xecute **J**oint **E**xam **J**ustification **E**nvironment
 
 競技プログラミング向けのコマンドラインツール。
 サンプルケースの取得と取得したケースに対するテスト実行に特化した、シングルバイナリで動作する軽量ツールです。
