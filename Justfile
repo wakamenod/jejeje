@@ -17,11 +17,11 @@ ci: fmt-check clippy test
 fmt-check:
     cargo fmt --all -- --check
 
-# リントチェック（CI と同じ。警告をエラー扱い）
+# リントチェック
 clippy:
     cargo clippy --all-targets --all-features -- -D warnings
 
-# 通常テストを実行（#[ignore] のネットワークテストは除外）
+# 通常テストを実行
 test:
     cargo test
 
@@ -29,7 +29,7 @@ test:
 # 開発用ユーティリティ
 # ──────────────────────────────────────────────
 
-# コードを自動フォーマット（チェックではなく適用）
+# コードを自動フォーマット
 fmt:
     cargo fmt --all
 
@@ -45,9 +45,22 @@ build-release:
 clean:
     cargo clean
 
-# ネットワークを使う統合テストを実行（時間がかかる）
+# 統合テストを実行（実サーバーへの HTTP リクエストあり。時間がかかる）
+# 通常の `cargo test` では実行されない #[ignore] テストのみ対象
+#
+# 全ジャッジの prepare / contests を網羅:
+#   AtCoder    : abc001 全4問・旧URL形式
+#   Codeforces : contest/1 全3問・単問
+#   yukicoder  : contests/1・単問 No.1
+#   AOJ        : ITP1 全問・旧URL形式
+#   直接解決   : abc001 / cf1 / itp1
+#   曖昧検索   : 複数マッチ・0件（エラー確認）
+#   contests   : atcoder / codeforces / yukicoder / aoj
+#
+# 統合テストを実行
 test-integration:
-    cargo test -- --ignored
+    cargo test --test integration_prepare -- --ignored
+    cargo test --test integration_contests -- --ignored
 
 # 全テストを実行（通常 + 統合）
 test-all:
@@ -56,3 +69,23 @@ test-all:
 # インストール（~/.cargo/bin/je に配置）
 install:
     cargo install --path .
+
+# 使い方: just release v0.1.0
+# タグを作成して push → GitHub Actions のリリースワークフローを起動
+release tag:
+    git tag {{tag}}
+    git push origin {{tag}}
+
+# リリースワークフローを手動で再実行（既存タグに対して）
+# 使い方: just release-rerun v0.1.0
+#
+# GitHub UI から実行する場合:
+#   1. リポジトリの Actions タブを開く
+#   2. 左サイドバーから Release をクリック
+#   3. Run workflow ボタンをクリック
+#   4. Branch: main、tag フィールドに対象タグ（例: v0.1.0）を入力
+#   5. 緑の Run workflow ボタンで実行
+#
+# リリースワークフローを手動で再実行（既存タグに対して）
+release-rerun tag:
+    gh workflow run release.yml --ref main --field tag={{tag}}

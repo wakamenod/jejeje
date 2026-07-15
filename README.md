@@ -159,75 +159,24 @@ je prepare https://atcoder.jp/contests/abc001
 # → abc001/a/main.cpp, abc001/a/main.rs, abc001/b/main.cpp ... が自動配置される
 ```
 
-## 開発・テスト
-
-### ユニットテスト
+## 開発
 
 ```bash
-cargo test
-```
+$ just
 
-### 統合テスト（実サーバーへの HTTP リクエストあり）
-
-通常の `cargo test` では実行されません。`--ignored` フラグを付けて明示的に実行します。
-
-```bash
-# prepare テストを全ジャッジで実行
-cargo test --test integration_prepare -- --ignored
-
-# contests テストを全ジャッジで実行
-cargo test --test integration_contests -- --ignored
-
-# 特定のジャッジのみ実行
-cargo test --test integration_prepare atcoder -- --ignored
-```
-
-## CI / リリース
-
-### CI (`.github/workflows/ci.yml`)
-
-`main` ブランチへの push および pull request で自動実行されます。
-
-```
-fmt-check → clippy → test
-```
-
-ローカルで同じチェックを実行するには:
-
-```bash
-just ci
-```
-
-### リリース (`.github/workflows/release.yml`)
-
-`v*` 形式のタグを push すると自動的に起動し、テスト通過後に 3 プラットフォームのバイナリを
-GitHub Release に添付します。
-
-| プラットフォーム | アーカイブ |
-|---|---|
-| Linux (x86_64) | `je-<tag>-linux-x86_64.tar.gz` |
-| macOS (Universal Binary) | `je-<tag>-macos-universal.tar.gz` |
-| Windows (x86_64) | `je-<tag>-windows-x86_64.zip` |
-
-#### タグによるリリース（通常フロー）
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-#### 手動再実行
-
-**GitHub UI から実行する場合:**
-
-1. リポジトリの **Actions** タブを開く
-2. 左サイドバーから **Release** をクリック
-3. **Run workflow** ボタンをクリック
-4. Branch: `main`、tag フィールドに対象タグ（例: `v0.1.0`）を入力
-5. 緑の **Run workflow** ボタンで実行
-
-**CLI から実行する場合:**
-
-```bash
-gh workflow run release.yml --ref main --field tag=v0.1.0
+Available recipes:
+    build             # デバッグビルド
+    build-release     # リリースビルド
+    ci                # CI と同じチェックを全て実行（fmt → clippy → test）
+    clean             # ビルド成果物を削除
+    clippy            # リントチェック
+    default           # デフォルト: レシピ一覧を表示
+    fmt               # コードを自動フォーマット
+    fmt-check         # フォーマットチェック（CI と同じ。修正はしない）
+    install           # インストール（~/.cargo/bin/je に配置）
+    release tag       # タグを作成して push → GitHub Actions のリリースワークフローを起動
+    release-rerun tag # リリースワークフローを手動で再実行（既存タグに対して）
+    test              # 通常テストを実行
+    test-all          # 全テストを実行（通常 + 統合）
+    test-integration  # 統合テストを実行
 ```
