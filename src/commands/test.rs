@@ -7,6 +7,9 @@ use std::{
 };
 use tokio::{io::AsyncWriteExt, process::Command, time::timeout};
 
+#[cfg(unix)]
+use std::os::unix::process::ExitStatusExt as _;
+
 // ─── 判定結果 ───────────────────────────────────────────────────────
 
 #[derive(Debug, PartialEq)]
@@ -34,6 +37,12 @@ struct TestOutcome {
     verdict: Verdict,
     actual: Option<String>,
     elapsed: Duration,
+    /// プロセスの終了コード（シグナルで強制終了された場合は None）
+    exit_code: Option<i32>,
+    /// Unix シグナル番号（シグナルで強制終了された場合のみ Some）
+    exit_signal: Option<i32>,
+    /// 標準エラー出力の内容（空文字列の場合は None）
+    stderr: Option<String>,
 }
 
 // ─── エントリポイント ──────────────────────────────────────────────
@@ -143,6 +152,11 @@ pub async fn run(
             }
             Verdict::Re => {
                 println!("{label}: {} ({elapsed_ms}ms)", verdict.display());
+                print_re_info(
+                    outcome.exit_code,
+                    outcome.exit_signal,
+                    outcome.stderr.as_deref(),
+                );
             }
         }
     }
@@ -186,8 +200,11 @@ async fn execute(cmd: &str, input: &str, time_limit: Duration) -> Result<TestOut
         Err(e) => {
             return Ok(TestOutcome {
                 verdict: Verdict::Re,
-                actual: Some(format!("Failed to spawn process: {e}")),
+                actual: None,
                 elapsed: start.elapsed(),
+                exit_code: None,
+                exit_signal: None,
+                stderr: Some(format!("Failed to spawn process: {e}")),
             });
         }
     };
@@ -209,19 +226,45 @@ async fn execute(cmd: &str, input: &str, time_limit: Duration) -> Result<TestOut
                     verdict: Verdict::Ac, // 比較は呼び出し元で行う
                     actual: Some(actual),
                     elapsed,
+                    exit_code: output.status.code(),
+                    exit_signal: None,
+                    stderr: None,
                 })
             } else {
+                // 終了コードの取得
+                let exit_code = output.status.code();
+
+                // Unix シグナル番号の取得（シグナルで強制終了された場合は code() が None）
+                #[cfg(unix)]
+                let exit_signal = output.status.signal();
+                #[cfg(not(unix))]
+                let exit_signal: Option<i32> = None;
+
+                // stderr の取得（空なら None）
+                let stderr_str = String::from_utf8_lossy(&output.stderr).to_string();
+                let stderr = if stderr_str.trim().is_empty() {
+                    None
+                } else {
+                    Some(stderr_str)
+                };
+
                 Ok(TestOutcome {
                     verdict: Verdict::Re,
                     actual: None,
                     elapsed,
+                    exit_code,
+                    exit_signal,
+                    stderr,
                 })
             }
         }
         Ok(Err(e)) => Ok(TestOutcome {
             verdict: Verdict::Re,
-            actual: Some(e.to_string()),
+            actual: None,
             elapsed: start_for_tle.elapsed(),
+            exit_code: None,
+            exit_signal: None,
+            stderr: Some(e.to_string()),
         }),
         Err(_) => {
             // TLE — timeout が発動した場合、Child はすでに drop されており kill 不要
@@ -229,6 +272,9 @@ async fn execute(cmd: &str, input: &str, time_limit: Duration) -> Result<TestOut
                 verdict: Verdict::Tle,
                 actual: None,
                 elapsed: start_for_tle.elapsed(),
+                exit_code: None,
+                exit_signal: None,
+                stderr: None,
             })
         }
     }
@@ -371,6 +417,81 @@ fn detect_source_file(command: Option<&str>, cwd: &std::path::Path) -> Option<St
     }
 
     None
+}
+
+// ─── RE 情報表示 ────────────────────────────────────────────────────
+
+/// RE 判定時に終了コード・シグナル・stderr を表示する。
+fn print_re_info(exit_code: Option<i32>, exit_signal: Option<i32>, stderr: Option<&str>) {
+    print!("{}", format_re_info(exit_code, exit_signal, stderr));
+}
+
+/// RE 情報を文字列にフォーマットして返す（テスト容易性のために分離）。
+fn format_re_info(
+    exit_code: Option<i32>,
+    exit_signal: Option<i32>,
+    stderr: Option<&str>,
+) -> String {
+    let mut out = String::new();
+
+    match (exit_code, exit_signal) {
+        (_, Some(sig)) => {
+            let name = signal_name(sig);
+            out.push_str(&format!(
+                "  {} {}\n",
+                "signal:".dimmed(),
+                format!("{sig} ({name})").bright_red()
+            ));
+        }
+        (Some(code), None) => {
+            out.push_str(&format!(
+                "  {} {}\n",
+                "exit code:".dimmed(),
+                code.to_string().bright_red()
+            ));
+        }
+        (None, None) => {}
+    }
+
+    if let Some(stderr) = stderr {
+        const MAX_LINES: usize = 20;
+        out.push_str(&format!("  {} :\n", "stderr".dimmed()));
+        for line in stderr.lines().take(MAX_LINES) {
+            out.push_str(&format!("    {}\n", line.bright_red()));
+        }
+        let total = stderr.lines().count();
+        if total > MAX_LINES {
+            out.push_str(&format!(
+                "    {} ({} lines omitted)\n",
+                "...".dimmed(),
+                total - MAX_LINES
+            ));
+        }
+    }
+
+    out
+}
+
+/// Unix シグナル番号を人間が読める名前に変換する。
+fn signal_name(sig: i32) -> &'static str {
+    match sig {
+        1 => "SIGHUP",
+        2 => "SIGINT",
+        3 => "SIGQUIT",
+        4 => "SIGILL",
+        5 => "SIGTRAP",
+        6 => "SIGABRT",
+        7 => "SIGBUS",
+        8 => "SIGFPE",
+        9 => "SIGKILL",
+        10 => "SIGUSR1",
+        11 => "SIGSEGV",
+        12 => "SIGUSR2",
+        13 => "SIGPIPE",
+        14 => "SIGALRM",
+        15 => "SIGTERM",
+        _ => "unknown",
+    }
 }
 
 // ─── 差分表示 ──────────────────────────────────────────────────────
@@ -561,5 +682,286 @@ mod tests {
     fn compare_float_near_zero_absolute_tolerance() {
         // ef が 0 に近い場合は絶対誤差で判定
         assert!(compare_float("0.0000001", "0.0", 1e-6));
+    }
+
+    // ─── signal_name ─────────────────────────────────────────────
+
+    #[test]
+    fn signal_name_known_signals() {
+        assert_eq!(signal_name(1), "SIGHUP");
+        assert_eq!(signal_name(2), "SIGINT");
+        assert_eq!(signal_name(3), "SIGQUIT");
+        assert_eq!(signal_name(4), "SIGILL");
+        assert_eq!(signal_name(5), "SIGTRAP");
+        assert_eq!(signal_name(6), "SIGABRT");
+        assert_eq!(signal_name(7), "SIGBUS");
+        assert_eq!(signal_name(8), "SIGFPE");
+        assert_eq!(signal_name(9), "SIGKILL");
+        assert_eq!(signal_name(10), "SIGUSR1");
+        assert_eq!(signal_name(11), "SIGSEGV");
+        assert_eq!(signal_name(12), "SIGUSR2");
+        assert_eq!(signal_name(13), "SIGPIPE");
+        assert_eq!(signal_name(14), "SIGALRM");
+        assert_eq!(signal_name(15), "SIGTERM");
+    }
+
+    #[test]
+    fn signal_name_unknown_falls_back() {
+        assert_eq!(signal_name(0), "unknown");
+        assert_eq!(signal_name(16), "unknown");
+        assert_eq!(signal_name(99), "unknown");
+        assert_eq!(signal_name(-1), "unknown");
+    }
+
+    // ─── format_re_info ──────────────────────────────────────────
+    //
+    // owo-colors が ANSI エスケープコードを埋め込むため、
+    // プレーンテキスト部分が含まれているかを strip_ansi_codes で確認する。
+
+    fn strip_ansi(s: &str) -> String {
+        // ANSI エスケープシーケンス \x1b[...m を除去する簡易実装
+        let mut out = String::new();
+        let mut chars = s.chars().peekable();
+        while let Some(c) = chars.next() {
+            if c == '\x1b' {
+                // '[' まで読み飛ばし、'm' が来るまで読み飛ばす
+                if chars.peek() == Some(&'[') {
+                    chars.next();
+                    for ch in chars.by_ref() {
+                        if ch == 'm' {
+                            break;
+                        }
+                    }
+                }
+            } else {
+                out.push(c);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn format_re_info_exit_code_only() {
+        let result = format_re_info(Some(1), None, None);
+        let plain = strip_ansi(&result);
+        assert!(
+            plain.contains("exit code:"),
+            "exit code: label should appear"
+        );
+        assert!(plain.contains('1'), "exit code value should appear");
+        assert!(
+            !plain.contains("signal:"),
+            "signal: label should not appear"
+        );
+        assert!(
+            !plain.contains("stderr"),
+            "stderr section should not appear"
+        );
+    }
+
+    #[test]
+    fn format_re_info_exit_code_nonzero() {
+        let result = format_re_info(Some(139), None, None);
+        let plain = strip_ansi(&result);
+        assert!(plain.contains("exit code:"));
+        assert!(plain.contains("139"));
+    }
+
+    #[test]
+    fn format_re_info_signal_only() {
+        let result = format_re_info(None, Some(11), None);
+        let plain = strip_ansi(&result);
+        assert!(plain.contains("signal:"), "signal: label should appear");
+        assert!(plain.contains("11"), "signal number should appear");
+        assert!(plain.contains("SIGSEGV"), "signal name should appear");
+        assert!(
+            !plain.contains("exit code:"),
+            "exit code: label should not appear"
+        );
+    }
+
+    #[test]
+    fn format_re_info_signal_takes_priority_over_exit_code() {
+        // シグナルが Some の場合、exit_code の値に関わらずシグナル表示が優先される
+        let result = format_re_info(Some(1), Some(9), None);
+        let plain = strip_ansi(&result);
+        assert!(plain.contains("signal:"), "signal: label should appear");
+        assert!(plain.contains("SIGKILL"));
+        assert!(
+            !plain.contains("exit code:"),
+            "exit code: label should not appear"
+        );
+    }
+
+    #[test]
+    fn format_re_info_both_none_produces_empty() {
+        let result = format_re_info(None, None, None);
+        assert!(result.is_empty(), "both None should produce empty string");
+    }
+
+    #[test]
+    fn format_re_info_stderr_shown() {
+        let result = format_re_info(Some(1), None, Some("error occurred\nsecond line"));
+        let plain = strip_ansi(&result);
+        assert!(
+            plain.contains("stderr"),
+            "stderr section header should appear"
+        );
+        assert!(
+            plain.contains("error occurred"),
+            "first stderr line should appear"
+        );
+        assert!(
+            plain.contains("second line"),
+            "second stderr line should appear"
+        );
+    }
+
+    #[test]
+    fn format_re_info_stderr_truncated_at_20_lines() {
+        // 21 行の stderr を渡すと最後の 1 行が省略されることを確認
+        let long_stderr = (1..=21)
+            .map(|i| format!("line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let result = format_re_info(None, None, Some(&long_stderr));
+        let plain = strip_ansi(&result);
+        assert!(plain.contains("line 20"), "line 20 should be shown");
+        assert!(!plain.contains("line 21"), "line 21 should be omitted");
+        assert!(
+            plain.contains("1 lines omitted"),
+            "omitted count should appear"
+        );
+    }
+
+    #[test]
+    fn format_re_info_stderr_exactly_20_lines_no_omission() {
+        let exactly_20 = (1..=20)
+            .map(|i| format!("line {i}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let result = format_re_info(None, None, Some(&exactly_20));
+        let plain = strip_ansi(&result);
+        assert!(plain.contains("line 20"), "line 20 should be shown");
+        assert!(
+            !plain.contains("omitted"),
+            "no omission message should appear"
+        );
+    }
+
+    #[test]
+    fn format_re_info_exit_code_and_stderr_combined() {
+        let result = format_re_info(Some(2), None, Some("segmentation fault"));
+        let plain = strip_ansi(&result);
+        assert!(plain.contains("exit code:"));
+        assert!(plain.contains('2'));
+        assert!(plain.contains("stderr"));
+        assert!(plain.contains("segmentation fault"));
+    }
+
+    // ─── execute ─────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn execute_nonexistent_command_returns_re_with_spawn_error() {
+        let outcome = execute("__nonexistent_command_xyz__", "", Duration::from_secs(5))
+            .await
+            .unwrap();
+        assert_eq!(outcome.verdict, Verdict::Re);
+        assert!(outcome.actual.is_none());
+        let stderr = outcome.stderr.expect("stderr should contain spawn error");
+        assert!(
+            stderr.contains("Failed to spawn process"),
+            "stderr was: {stderr}"
+        );
+        assert!(outcome.exit_code.is_none());
+        assert!(outcome.exit_signal.is_none());
+    }
+
+    #[tokio::test]
+    async fn execute_nonzero_exit_returns_re_with_exit_code() {
+        // `false` コマンドは exit code 1 で終了する（どの Unix 環境にも存在する）
+        let outcome = execute("false", "", Duration::from_secs(5)).await.unwrap();
+        assert_eq!(outcome.verdict, Verdict::Re);
+        assert_eq!(outcome.exit_code, Some(1));
+        assert!(outcome.actual.is_none());
+    }
+
+    #[tokio::test]
+    async fn execute_nonzero_exit_stderr_is_captured() {
+        // stderr に書き込んで exit 1 するシェルスクリプトを一時ファイルで実行
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        writeln!(tmp, "#!/bin/sh").unwrap();
+        writeln!(tmp, "echo 'error message' >&2").unwrap();
+        writeln!(tmp, "exit 1").unwrap();
+        // 実行権限を付与
+        let path = tmp.path().to_str().unwrap().to_string();
+        std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .unwrap();
+
+        let outcome = execute(&path, "", Duration::from_secs(5)).await.unwrap();
+        assert_eq!(outcome.verdict, Verdict::Re);
+        assert_eq!(outcome.exit_code, Some(1));
+        let stderr = outcome.stderr.expect("stderr should be captured");
+        assert!(stderr.contains("error message"), "stderr was: {stderr}");
+    }
+
+    #[tokio::test]
+    async fn execute_success_returns_ac_with_stdout() {
+        let outcome = execute("echo hello", "", Duration::from_secs(5))
+            .await
+            .unwrap();
+        assert_eq!(outcome.verdict, Verdict::Ac);
+        assert_eq!(outcome.actual.as_deref(), Some("hello\n"));
+        assert!(outcome.stderr.is_none());
+        assert_eq!(outcome.exit_code, Some(0));
+    }
+
+    #[tokio::test]
+    async fn execute_stdin_is_passed_to_process() {
+        // cat はそのまま stdin を stdout に流す
+        let outcome = execute("cat", "hello world\n", Duration::from_secs(5))
+            .await
+            .unwrap();
+        assert_eq!(outcome.verdict, Verdict::Ac);
+        assert_eq!(outcome.actual.as_deref(), Some("hello world\n"));
+    }
+
+    #[tokio::test]
+    async fn execute_tle_returns_tle_verdict() {
+        let outcome = execute("sleep 60", "", Duration::from_millis(100))
+            .await
+            .unwrap();
+        assert_eq!(outcome.verdict, Verdict::Tle);
+        assert!(outcome.actual.is_none());
+        assert!(outcome.stderr.is_none());
+    }
+
+    #[tokio::test]
+    async fn execute_empty_stderr_is_none() {
+        // `false` は stderr に何も出力せず exit 1 で終了する
+        let outcome = execute("false", "", Duration::from_secs(5)).await.unwrap();
+        assert_eq!(outcome.verdict, Verdict::Re);
+        assert!(outcome.stderr.is_none(), "empty stderr should be None");
+    }
+
+    #[tokio::test]
+    async fn execute_whitespace_only_stderr_is_none() {
+        // 空白・改行のみの stderr も None 扱い — 一時スクリプトで確認
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new().unwrap();
+        writeln!(tmp, "#!/bin/sh").unwrap();
+        writeln!(tmp, "printf '  \\n' >&2").unwrap();
+        writeln!(tmp, "exit 1").unwrap();
+        let path = tmp.path().to_str().unwrap().to_string();
+        std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .unwrap();
+
+        let outcome = execute(&path, "", Duration::from_secs(5)).await.unwrap();
+        assert_eq!(outcome.verdict, Verdict::Re);
+        assert!(
+            outcome.stderr.is_none(),
+            "whitespace-only stderr should be None"
+        );
     }
 }
