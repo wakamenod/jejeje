@@ -67,7 +67,9 @@ pub async fn run(
         if let Some(task) = contest_meta.tasks.iter().find(|t| t.id == dir_name) {
             println!("{}: {}", "Title".dimmed(), task.name.bold());
             println!("{}: {}", "URL  ".dimmed(), task.url);
-            if let Some(fname) = detect_source_file(command.as_deref(), task.filename.as_deref(), &cwd) {
+            if let Some(fname) =
+                detect_source_file(command.as_deref(), task.filename.as_deref(), &cwd)
+            {
                 println!("{}: {}", "File ".dimmed(), fname.bold());
             }
             println!();
@@ -342,8 +344,8 @@ fn detect_source_file(
     cwd: &std::path::Path,
 ) -> Option<String> {
     const SOURCE_EXTENSIONS: &[&str] = &[
-        "rb", "py", "cpp", "cc", "cxx", "c", "rs", "java", "go", "js", "ts", "kt", "swift",
-        "cs", "hs", "ml", "scala", "d", "nim", "cr", "ex", "exs", "php", "pl",
+        "rb", "py", "cpp", "cc", "cxx", "c", "rs", "java", "go", "js", "ts", "kt", "swift", "cs",
+        "hs", "ml", "scala", "d", "nim", "cr", "ex", "exs", "php", "pl",
     ];
 
     // 1. --command の最後のトークンがファイルとして存在するか確認
