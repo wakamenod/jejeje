@@ -67,7 +67,7 @@ pub async fn run(
         if let Some(task) = contest_meta.tasks.iter().find(|t| t.id == dir_name) {
             println!("{}: {}", "Title".dimmed(), task.name.bold());
             println!("{}: {}", "URL  ".dimmed(), task.url);
-            if let Some(fname) = &task.filename {
+            if let Some(fname) = detect_source_file(command.as_deref(), task.filename.as_deref(), &cwd) {
                 println!("{}: {}", "File ".dimmed(), fname.bold());
             }
             println!();
@@ -324,6 +324,67 @@ fn compare_float(actual: &str, expected: &str, eps: f64) -> bool {
                 false
             }
         })
+}
+
+// ─── ソースファイル検出 ────────────────────────────────────────────
+
+/// 表示するソースファイル名を動的に決定する。
+///
+/// 優先順位:
+/// 1. `command` の最後のトークンが既存ファイルを指す場合はそれを採用
+///    (例: "ruby main.rb" → "main.rb")
+/// 2. メタデータの `meta_filename` が CWD に実際に存在すれば採用
+/// 3. CWD に既知拡張子のソースファイルが 1 つだけあればそれを採用
+/// 4. それ以外は `meta_filename` をフォールバックとして返す
+fn detect_source_file(
+    command: Option<&str>,
+    meta_filename: Option<&str>,
+    cwd: &std::path::Path,
+) -> Option<String> {
+    const SOURCE_EXTENSIONS: &[&str] = &[
+        "rb", "py", "cpp", "cc", "cxx", "c", "rs", "java", "go", "js", "ts", "kt", "swift",
+        "cs", "hs", "ml", "scala", "d", "nim", "cr", "ex", "exs", "php", "pl",
+    ];
+
+    // 1. --command の最後のトークンがファイルとして存在するか確認
+    if let Some(cmd) = command
+        && let Some(last) = cmd.split_whitespace().last()
+    {
+        let candidate = cwd.join(last);
+        if candidate.is_file() {
+            return Some(last.to_string());
+        }
+    }
+
+    // 2. メタデータのファイル名が CWD に実際に存在するか確認
+    if let Some(fname) = meta_filename
+        && cwd.join(fname).is_file()
+    {
+        return Some(fname.to_string());
+    }
+
+    // 3. CWD に既知拡張子のソースファイルが 1 つだけなら採用
+    let source_files: Vec<String> = std::fs::read_dir(cwd)
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().is_file())
+        .filter(|e| {
+            e.path()
+                .extension()
+                .and_then(|x| x.to_str())
+                .map(|ext| SOURCE_EXTENSIONS.contains(&ext))
+                .unwrap_or(false)
+        })
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+
+    if source_files.len() == 1 {
+        return Some(source_files.into_iter().next().unwrap());
+    }
+
+    // 4. フォールバック: メタデータの filename をそのまま返す
+    meta_filename.map(|s| s.to_string())
 }
 
 // ─── 差分表示 ──────────────────────────────────────────────────────
