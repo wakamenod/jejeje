@@ -261,7 +261,6 @@ pub async fn fetch_contest(url: &str, client: &reqwest::Client) -> Result<Contes
                 id: problem_id.clone(),
                 name: problem.name,
                 url: format!("https://onlinejudge.u-aizu.ac.jp/problems/{problem_id}"),
-                filename: None,
             });
         }
     }
@@ -330,7 +329,6 @@ async fn fetch_challenge(url: &str, client: &reqwest::Client) -> Result<ContestM
             url: format!("https://onlinejudge.u-aizu.ac.jp/problems/{}", p.id),
             id: p.id,
             name: p.name,
-            filename: None,
         })
         .collect();
 
@@ -389,7 +387,6 @@ async fn fetch_volume(url: &str, client: &reqwest::Client) -> Result<ContestMeta
             url: format!("https://onlinejudge.u-aizu.ac.jp/problems/{}", p.id),
             id: p.id.clone(),
             name: p.name,
-            filename: None,
         })
         .collect();
 

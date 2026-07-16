@@ -24,10 +24,6 @@ pub struct TaskMeta {
     pub name: String,
     /// 問題ページの URL
     pub url: String,
-    /// `je prepare` でコピーされたテンプレートファイル名（例: "main.cpp"）
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    pub filename: Option<String>,
 }
 
 /// コンテスト全体のメタデータ。`.je-meta.json` として保存される。
@@ -54,7 +50,6 @@ mod tests {
             id: "a".to_string(),
             name: "Two Sum".to_string(),
             url: "https://atcoder.jp/contests/abc001/tasks/abc001_a".to_string(),
-            filename: None,
         }
     }
 

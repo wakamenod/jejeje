@@ -20,7 +20,7 @@ pub async fn run(url_or_query: String) -> Result<()> {
     if judge::is_contest_url(&url) {
         // コンテスト URL: 全タスクのディレクトリを一括作成
         println!("Fetching contest info from {url}...");
-        let mut contest_meta = judge::fetch_contest(&url, &client).await?;
+        let contest_meta = judge::fetch_contest(&url, &client).await?;
 
         let contest_dir = Path::new(&contest_meta.contest_id).to_path_buf();
         fs::create_dir_all(&contest_dir)
@@ -33,19 +33,10 @@ pub async fn run(url_or_query: String) -> Result<()> {
             contest_meta.contest_name, contest_meta.contest_id
         );
 
-        let mut meta_updated = false;
-        for task in &mut contest_meta.tasks {
+        for task in &contest_meta.tasks {
             let task_dir = contest_dir.join(&task.id);
-            let copied_file = setup_task_dir(&task_dir, &task.url, &config, &client).await?;
-            if let Some(fname) = copied_file {
-                task.filename = Some(fname);
-                meta_updated = true;
-            }
+            setup_task_dir(&task_dir, &task.url, &config, &client).await?;
             println!("  [{}] {} — {}", task.id, task.name, task_dir.display());
-        }
-        // テンプレートファイル名を記録した場合はメタデータを再保存する
-        if meta_updated {
-            meta::save(&contest_dir, &contest_meta)?;
         }
     } else {
         // 問題 URL: 単一タスクのディレクトリを作成
@@ -56,21 +47,11 @@ pub async fn run(url_or_query: String) -> Result<()> {
         let task_dir = base_dir.join(&task_id);
 
         println!("Preparing task '{task_id}'...");
-        let copied_file = setup_task_dir(&task_dir, &url, &config, &client)
+        setup_task_dir(&task_dir, &url, &config, &client)
             .await
             .with_context(|| {
                 format!("Failed to prepare task directory '{}'", task_dir.display())
             })?;
-
-        // コンテストメタがあればファイル名を更新して再保存する
-        if let Some(fname) = copied_file
-            && let Ok(mut contest_meta) = meta::load(&cwd)
-            && let Some(task) = contest_meta.tasks.iter_mut().find(|t| t.id == task_id)
-        {
-            task.filename = Some(fname);
-            let root = meta::find_contest_root(&cwd).unwrap_or_else(|| cwd.clone());
-            meta::save(&root, &contest_meta)?;
-        }
 
         println!("Done: {}", task_dir.display());
     }
@@ -83,14 +64,12 @@ pub async fn run(url_or_query: String) -> Result<()> {
 /// - `test/` ディレクトリを作成し、サンプルファイルを常に上書きする
 /// - `template_dir` が設定されている場合、その直下のファイルを全てコピーする
 ///   （コピー先が既に存在するファイルはスキップする）
-///
-/// 戻り値: 新規コピーされたテンプレートファイルの最初のファイル名（なければ `None`）
 pub async fn setup_task_dir(
     task_dir: &Path,
     problem_url: &str,
     config: &Config,
     client: &reqwest::Client,
-) -> Result<Option<String>> {
+) -> Result<()> {
     let test_dir = task_dir.join("test");
     fs::create_dir_all(&test_dir)?;
 
@@ -106,14 +85,11 @@ pub async fn setup_task_dir(
     }
 
     // template_dir 直下のファイルを全てコピーする（既存ファイルはスキップ）
-    let copied_filename = if let Some(dir) = &config.template_dir {
-        let copied = copy_template_all(task_dir, dir)?;
-        copied.into_iter().next()
-    } else {
-        None
-    };
+    if let Some(dir) = &config.template_dir {
+        copy_template_all(task_dir, dir)?;
+    }
 
-    Ok(copied_filename)
+    Ok(())
 }
 
 /// `template_dir` 直下のファイルをタスクディレクトリへ全てコピーする。

@@ -101,7 +101,6 @@ pub async fn fetch_contest(url: &str, client: &reqwest::Client) -> Result<Contes
             id: problem.no.to_string(),
             name: problem.title.clone(),
             url: format!("{BASE}/problems/no/{}", problem.no),
-            filename: None,
         });
     }
 

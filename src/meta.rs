@@ -62,7 +62,6 @@ mod tests {
                 id: "a".to_string(),
                 name: "Two Sum".to_string(),
                 url: "https://atcoder.jp/contests/abc001/tasks/abc001_a".to_string(),
-                filename: None,
             }],
         }
     }
