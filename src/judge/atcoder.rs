@@ -263,7 +263,20 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
     let mut outputs: Vec<String> = Vec::new();
 
     // ── 新形式: <section> の中に <h3> と <pre> が同居 ──────────────
-    for section in doc.select(&section_sel) {
+    //
+    // AtCoder の問題ページには日本語版と英語版の両方が含まれており、
+    // それぞれ <span class="lang-ja"> / <span class="lang-en"> で囲まれている。
+    // 全体を走査すると同じサンプルが2回取得されるため、
+    // lang-ja セクションが存在する場合はその中だけを対象にする。
+    let lang_ja_sel = Selector::parse("span.lang-ja").unwrap();
+    let search_root: Box<dyn Iterator<Item = scraper::ElementRef>> =
+        if let Some(lang_ja) = doc.select(&lang_ja_sel).next() {
+            Box::new(lang_ja.select(&section_sel))
+        } else {
+            Box::new(doc.select(&section_sel))
+        };
+
+    for section in search_root {
         let heading = section
             .select(&h3_sel)
             .next()
@@ -289,7 +302,15 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
     if inputs.is_empty() {
         let part_sel = Selector::parse("div.part").unwrap();
 
-        for part in doc.select(&part_sel) {
+        // 旧形式でも lang-ja が存在する場合はその中だけを対象にする
+        let fallback_root: Box<dyn Iterator<Item = scraper::ElementRef>> =
+            if let Some(lang_ja) = doc.select(&lang_ja_sel).next() {
+                Box::new(lang_ja.select(&part_sel))
+            } else {
+                Box::new(doc.select(&part_sel))
+            };
+
+        for part in fallback_root {
             // <div class="part"> の直接の子 <h3> からヘッダーを取得
             let heading = part
                 .select(&h3_sel)
@@ -851,6 +872,35 @@ mod tests {
         assert_eq!(samples.len(), 1);
         assert_eq!(samples[0].input, "3\n1 2 3\n");
         assert_eq!(samples[0].output, "6\n");
+    }
+
+    #[test]
+    fn parse_samples_lang_ja_en_no_duplicates() {
+        // AtCoder の問題ページには日本語版と英語版の両方が含まれる。
+        // lang-ja 内だけを対象にパースし、重複しないことを確認する。
+        let html = r#"
+<html><body>
+  <span class="lang-ja">
+    <div class="part"><section><h3>入力例 1</h3><pre>1</pre></section></div>
+    <div class="part"><section><h3>出力例 1</h3><pre>2</pre></section></div>
+    <div class="part"><section><h3>入力例 2</h3><pre>3</pre></section></div>
+    <div class="part"><section><h3>出力例 2</h3><pre>4</pre></section></div>
+  </span>
+  <span class="lang-en">
+    <div class="part"><section><h3>Sample Input 1</h3><pre>1</pre></section></div>
+    <div class="part"><section><h3>Sample Output 1</h3><pre>2</pre></section></div>
+    <div class="part"><section><h3>Sample Input 2</h3><pre>3</pre></section></div>
+    <div class="part"><section><h3>Sample Output 2</h3><pre>4</pre></section></div>
+  </span>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        // lang-ja の 2 ケースのみ取得され、英語版との重複がないこと
+        assert_eq!(samples.len(), 2);
+        assert_eq!(samples[0].input.trim(), "1");
+        assert_eq!(samples[0].output.trim(), "2");
+        assert_eq!(samples[1].input.trim(), "3");
+        assert_eq!(samples[1].output.trim(), "4");
     }
 
     #[test]
