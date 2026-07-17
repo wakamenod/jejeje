@@ -497,20 +497,18 @@ fn signal_name(sig: i32) -> &'static str {
 // ─── 差分表示 ──────────────────────────────────────────────────────
 
 fn print_diff(input: &str, expected: &str, actual: &str) {
-    const MAX_LINES: usize = 8;
-
     println!("  {} :", "Input".dimmed());
-    for line in input.lines().take(MAX_LINES) {
+    for line in input.lines() {
         println!("    {line}");
     }
 
     println!("  {} :", "Expected".green());
-    for line in expected.lines().take(MAX_LINES) {
+    for line in expected.lines() {
         println!("    {}", line.green());
     }
 
     println!("  {} :", "Actual".red());
-    for line in actual.lines().take(MAX_LINES) {
+    for line in actual.lines() {
         println!("    {}", line.red());
     }
 }
