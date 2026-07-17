@@ -74,12 +74,16 @@ pub async fn run(
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
         if let Some(task) = contest_meta.tasks.iter().find(|t| t.id == dir_name) {
-            println!("{}: {}", "Title".dimmed(), task.name.bold());
-            println!("{}: {}", "URL  ".dimmed(), task.url);
-            if let Some(fname) = detect_source_file(command.as_deref(), &cwd) {
-                println!("{}: {}", "File ".dimmed(), fname.bold());
-            }
-            println!();
+            let fname = detect_source_file(command.as_deref(), &cwd);
+            print!(
+                "{}",
+                format_header(
+                    &contest_meta.contest_name,
+                    &task.name,
+                    &task.url,
+                    fname.as_deref(),
+                )
+            );
         }
     }
 
@@ -419,6 +423,26 @@ fn detect_source_file(command: Option<&str>, cwd: &std::path::Path) -> Option<St
     None
 }
 
+// ─── ヘッダー表示 ─────────────────────────────────────────────────
+
+/// `je test` 実行時の上部メタ情報をフォーマットして返す。
+/// `file` が `Some` の場合のみ File 行を含む。末尾には空行（`\n`）を付加する。
+fn format_header(contest_name: &str, task_name: &str, url: &str, file: Option<&str>) -> String {
+    let mut out = String::new();
+    out.push_str(&format!(
+        "{}: {}\n",
+        "Contest".dimmed(),
+        contest_name.bold()
+    ));
+    out.push_str(&format!("{}: {}\n", "Title  ".dimmed(), task_name.bold()));
+    out.push_str(&format!("{}: {}\n", "URL    ".dimmed(), url));
+    if let Some(fname) = file {
+        out.push_str(&format!("{}: {}\n", "File   ".dimmed(), fname.bold()));
+    }
+    out.push('\n');
+    out
+}
+
 // ─── RE 情報表示 ────────────────────────────────────────────────────
 
 /// RE 判定時に終了コード・シグナル・stderr を表示する。
@@ -709,6 +733,72 @@ mod tests {
         assert_eq!(signal_name(16), "unknown");
         assert_eq!(signal_name(99), "unknown");
         assert_eq!(signal_name(-1), "unknown");
+    }
+
+    // ─── format_header ───────────────────────────────────────────
+
+    #[test]
+    fn format_header_contains_contest_name() {
+        let s = format_header(
+            "AtCoder Beginner Contest 001",
+            "Two Sum",
+            "https://example.com",
+            None,
+        );
+        assert!(strip_ansi(&s).contains("AtCoder Beginner Contest 001"));
+    }
+
+    #[test]
+    fn format_header_contains_task_name() {
+        let s = format_header("ABC 001", "Two Sum", "https://example.com", None);
+        assert!(strip_ansi(&s).contains("Two Sum"));
+    }
+
+    #[test]
+    fn format_header_contains_url() {
+        let s = format_header("ABC 001", "Two Sum", "https://example.com/tasks/a", None);
+        assert!(strip_ansi(&s).contains("https://example.com/tasks/a"));
+    }
+
+    #[test]
+    fn format_header_contains_file_when_some() {
+        let s = format_header("ABC 001", "Two Sum", "https://example.com", Some("main.rs"));
+        let plain = strip_ansi(&s);
+        assert!(plain.contains("main.rs"));
+        assert!(plain.contains("File"));
+    }
+
+    #[test]
+    fn format_header_omits_file_when_none() {
+        let s = format_header("ABC 001", "Two Sum", "https://example.com", None);
+        let plain = strip_ansi(&s);
+        assert!(!plain.contains("File"));
+    }
+
+    #[test]
+    fn format_header_ends_with_trailing_blank_line() {
+        let s = format_header("ABC 001", "Two Sum", "https://example.com", None);
+        assert!(s.ends_with("\n\n"), "末尾に空行が必要: {:?}", s);
+    }
+
+    #[test]
+    fn format_header_ends_with_trailing_blank_line_with_file() {
+        let s = format_header("ABC 001", "Two Sum", "https://example.com", Some("main.rs"));
+        assert!(s.ends_with("\n\n"), "末尾に空行が必要: {:?}", s);
+    }
+
+    #[test]
+    fn format_header_label_alignment() {
+        // Contest / Title   / URL     / File    のコロン位置が揃っているか確認
+        let s = format_header("ABC 001", "Two Sum", "https://example.com", Some("main.rs"));
+        let plain = strip_ansi(&s);
+        let colon_positions: Vec<usize> = plain.lines().filter_map(|line| line.find(':')).collect();
+        // 全行のコロン位置が同一であること
+        assert!(
+            colon_positions.windows(2).all(|w| w[0] == w[1]),
+            "コロン位置が揃っていない: {:?}",
+            colon_positions
+        );
     }
 
     // ─── format_re_info ──────────────────────────────────────────
