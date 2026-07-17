@@ -1,4 +1,4 @@
-use crate::{config::Config, judge, meta};
+use crate::{config::Config, judge, judge::codeforces::extract_round_number, meta};
 use anyhow::{Context, Result};
 use std::{fs, path::Path};
 
@@ -22,7 +22,15 @@ pub async fn run(url_or_query: String) -> Result<()> {
         println!("Fetching contest info from {url}...");
         let contest_meta = judge::fetch_contest(&url, &client).await?;
 
-        let contest_dir = Path::new(&contest_meta.contest_id).to_path_buf();
+        let contest_dir_name = if contest_meta.judge == "codeforces" {
+            match extract_round_number(&contest_meta.contest_name) {
+                Some(n) => format!("{}_round{n}", contest_meta.contest_id),
+                None => contest_meta.contest_id.clone(),
+            }
+        } else {
+            contest_meta.contest_id.clone()
+        };
+        let contest_dir = Path::new(&contest_dir_name).to_path_buf();
         fs::create_dir_all(&contest_dir)
             .with_context(|| format!("Failed to create {}", contest_dir.display()))?;
 

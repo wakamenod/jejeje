@@ -226,6 +226,45 @@ fn normalize_pre_text(s: String) -> String {
     }
 }
 
+/// コンテスト名から Codeforces Round 番号を抽出する。
+///
+/// 対応パターン:
+/// - `"Codeforces Round #750 (Div. 2)"` → `Some(750)`
+/// - `"Codeforces Round 750"`            → `Some(750)`
+/// - `"Educational Codeforces Round 150"` → `None`（"Round" の直前が "Codeforces" でないため）
+/// - `"Codeforces Global Round 25"`      → `None`（"Global Round" は別扱い）
+pub fn extract_round_number(name: &str) -> Option<u32> {
+    // "Codeforces Round" というトークン列を探し、その後の数字を取得する。
+    // "Educational Codeforces Round" や "Codeforces Global Round" は除外する。
+    let lower = name.to_lowercase();
+
+    // "global round" が含まれる場合は対象外
+    if lower.contains("global round") {
+        return None;
+    }
+
+    // "educational" が含まれる場合は対象外
+    if lower.contains("educational") {
+        return None;
+    }
+
+    // "codeforces round" を探す
+    let marker = "codeforces round";
+    let pos = lower.find(marker)?;
+    let after = name[pos + marker.len()..].trim_start();
+
+    // "#" があればスキップ
+    let after = after.strip_prefix('#').unwrap_or(after).trim_start();
+
+    // 先頭の連続する数字を取得
+    let digits: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
+    if digits.is_empty() {
+        return None;
+    }
+
+    digits.parse::<u32>().ok()
+}
+
 fn parse_contest_name(html: &str) -> Option<String> {
     let doc = Html::parse_document(html);
     let sel = Selector::parse(".contest-name").unwrap();
@@ -585,6 +624,47 @@ mod tests {
     #[test]
     fn normalize_pre_text_only_whitespace() {
         assert_eq!(normalize_pre_text("   \n\n".to_string()), "");
+    }
+
+    // ─── extract_round_number ────────────────────────────────────
+
+    #[test]
+    fn extract_round_number_with_hash() {
+        assert_eq!(
+            extract_round_number("Codeforces Round #750 (Div. 2)"),
+            Some(750)
+        );
+    }
+
+    #[test]
+    fn extract_round_number_without_hash() {
+        assert_eq!(
+            extract_round_number("Codeforces Round 750 (Div. 1)"),
+            Some(750)
+        );
+    }
+
+    #[test]
+    fn extract_round_number_plain() {
+        assert_eq!(extract_round_number("Codeforces Round 1"), Some(1));
+    }
+
+    #[test]
+    fn extract_round_number_educational_returns_none() {
+        assert_eq!(
+            extract_round_number("Educational Codeforces Round 150 (Rated for Div. 2)"),
+            None
+        );
+    }
+
+    #[test]
+    fn extract_round_number_global_returns_none() {
+        assert_eq!(extract_round_number("Codeforces Global Round 25"), None);
+    }
+
+    #[test]
+    fn extract_round_number_no_round_returns_none() {
+        assert_eq!(extract_round_number("April Fools Day Contest"), None);
     }
 
     // ─── parse_contest_name ──────────────────────────────────────
