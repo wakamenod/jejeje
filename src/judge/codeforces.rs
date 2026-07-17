@@ -267,11 +267,32 @@ pub fn extract_round_number(name: &str) -> Option<u32> {
 
 fn parse_contest_name(html: &str) -> Option<String> {
     let doc = Html::parse_document(html);
+
+    // 1st: .contest-name 要素（ログイン済み時などに存在する）
     let sel = Selector::parse(".contest-name").unwrap();
-    doc.select(&sel)
-        .next()
-        .map(|el| el.text().collect::<String>().trim().to_string())
-        .filter(|s| !s.is_empty())
+    if let Some(el) = doc.select(&sel).next() {
+        let name = el.text().collect::<String>().trim().to_string();
+        if !name.is_empty() {
+            return Some(name);
+        }
+    }
+
+    // 2nd: <title> タグ "Dashboard - {name} - Codeforces" をパース
+    // 未ログイン時でも常に存在するためフォールバックとして利用する。
+    let title_sel = Selector::parse("title").unwrap();
+    if let Some(el) = doc.select(&title_sel).next() {
+        let title = el.text().collect::<String>();
+        if let Some(rest) = title.strip_prefix("Dashboard - ")
+            && let Some(name) = rest.strip_suffix(" - Codeforces")
+        {
+            let name = name.trim().to_string();
+            if !name.is_empty() {
+                return Some(name);
+            }
+        }
+    }
+
+    None
 }
 
 // ─── ヘルパー ──────────────────────────────────────────────────────
@@ -680,6 +701,43 @@ mod tests {
     #[test]
     fn parse_contest_name_not_found() {
         let html = "<html><body></body></html>";
+        assert!(parse_contest_name(html).is_none());
+    }
+
+    #[test]
+    fn parse_contest_name_from_title_tag() {
+        // 未ログイン時など .contest-name が存在しない場合は <title> からパース
+        let html = r#"<html><head><title>Dashboard - Codeforces Round 886 (Div. 4) - Codeforces</title></head><body></body></html>"#;
+        let name = parse_contest_name(html).unwrap();
+        assert_eq!(name, "Codeforces Round 886 (Div. 4)");
+    }
+
+    #[test]
+    fn parse_contest_name_prefers_contest_name_element_over_title() {
+        // .contest-name が存在する場合はそちらを優先する
+        let html = r#"<html><head><title>Dashboard - Codeforces Round 886 (Div. 4) - Codeforces</title></head><body><div class="contest-name">Codeforces Round #750 (Div. 2)</div></body></html>"#;
+        let name = parse_contest_name(html).unwrap();
+        assert_eq!(name, "Codeforces Round #750 (Div. 2)");
+    }
+
+    #[test]
+    fn parse_contest_name_title_educational_round() {
+        let html = r#"<html><head><title>Dashboard - Educational Codeforces Round 150 (Rated for Div. 2) - Codeforces</title></head><body></body></html>"#;
+        let name = parse_contest_name(html).unwrap();
+        assert_eq!(name, "Educational Codeforces Round 150 (Rated for Div. 2)");
+    }
+
+    #[test]
+    fn parse_contest_name_title_global_round() {
+        let html = r#"<html><head><title>Dashboard - Codeforces Global Round 25 - Codeforces</title></head><body></body></html>"#;
+        let name = parse_contest_name(html).unwrap();
+        assert_eq!(name, "Codeforces Global Round 25");
+    }
+
+    #[test]
+    fn parse_contest_name_title_not_dashboard_format_returns_none() {
+        // "Dashboard - " で始まらない <title> はパース対象外
+        let html = r#"<html><head><title>Codeforces</title></head><body></body></html>"#;
         assert!(parse_contest_name(html).is_none());
     }
 }
