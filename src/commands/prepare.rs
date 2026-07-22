@@ -84,7 +84,7 @@ pub async fn setup_task_dir(
     // サンプルは常に最新に更新する
     let samples = judge::fetch_samples(problem_url, client).await?;
     if samples.is_empty() {
-        println!("  (no samples found)");
+        println!("  (no samples found — may be an interactive problem)");
     }
     for (i, sample) in samples.iter().enumerate() {
         let n = i + 1;

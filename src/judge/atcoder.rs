@@ -253,6 +253,12 @@ fn parse_task_table(html: &str, contest_id: &str) -> Result<Vec<TaskMeta>, AppEr
 ///
 /// `<pre><code>...</code></pre>` のネスト構造にも対応する。
 fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
+    // インタラクティブ形式の問題はサンプル入出力が存在しない。
+    // ページ内に「インタラクティブ」「Interactive」の文言がある場合は空を返す。
+    if html.contains("インタラクティブ") || html.contains("Interactive") {
+        return Ok(Vec::new());
+    }
+
     let doc = Html::parse_document(html);
     let section_sel = Selector::parse("section").unwrap();
     let h3_sel = Selector::parse("h3").unwrap();
@@ -333,17 +339,20 @@ fn parse_samples(html: &str) -> Result<Vec<SampleCase>, AppError> {
     }
 
     if inputs.is_empty() {
-        return Err(AppError::SampleParse(
-            "No sample inputs found on this page".to_string(),
-        ));
+        // サンプルが見つからない場合は空リストを返してスキップ扱いにする。
+        // インタラクティブ問題以外の原因（ページ構造の変化など）も考慮し、
+        // エラーではなく警告として上位に委ねる。
+        return Ok(Vec::new());
     }
 
     if inputs.len() != outputs.len() {
-        return Err(AppError::SampleParse(format!(
-            "Sample input/output count mismatch: {} input(s) vs {} output(s)",
+        // 入出力の件数が合わない場合も空リストを返してスキップ扱いにする。
+        eprintln!(
+            "  Warning: sample input/output count mismatch ({} input(s) vs {} output(s)), skipping samples",
             inputs.len(),
             outputs.len(),
-        )));
+        );
+        return Ok(Vec::new());
     }
 
     let samples = inputs
@@ -800,10 +809,43 @@ mod tests {
     }
 
     #[test]
-    fn parse_samples_no_samples_returns_error() {
+    fn parse_samples_no_samples_returns_empty() {
+        // サンプルが見つからない場合はエラーではなく空リストを返す
         let html = "<html><body><p>Nothing here</p></body></html>";
-        let err = parse_samples(html).unwrap_err();
-        assert!(matches!(err, AppError::SampleParse(_)));
+        let samples = parse_samples(html).unwrap();
+        assert!(samples.is_empty());
+    }
+
+    #[test]
+    fn parse_samples_interactive_japanese_returns_empty() {
+        // 「インタラクティブ」という文言があるページはサンプルなしとして空を返す
+        let html = r#"
+<html><body>
+  <p>この問題はインタラクティブ形式です。</p>
+  <section>
+    <h3>入力例 1</h3>
+    <pre>3 5</pre>
+  </section>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert!(samples.is_empty());
+    }
+
+    #[test]
+    fn parse_samples_interactive_english_returns_empty() {
+        // "Interactive" という文言があるページも同様に空を返す
+        let html = r#"
+<html><body>
+  <p>This is an Interactive problem.</p>
+  <section>
+    <h3>Sample Input 1</h3>
+    <pre>3 5</pre>
+  </section>
+</body></html>
+"#;
+        let samples = parse_samples(html).unwrap();
+        assert!(samples.is_empty());
     }
 
     #[test]
@@ -903,8 +945,8 @@ mod tests {
     }
 
     #[test]
-    fn parse_samples_input_output_count_mismatch_returns_error() {
-        // 出力例が入力例より少ない場合はエラー
+    fn parse_samples_input_output_count_mismatch_returns_empty() {
+        // 出力例が入力例より少ない場合はエラーではなく空リストを返す
         let html = r#"
 <html><body>
   <section>
@@ -921,13 +963,8 @@ mod tests {
   </section>
 </body></html>
 "#;
-        let err = parse_samples(html).unwrap_err();
-        assert!(matches!(err, AppError::SampleParse(_)));
-        let msg = err.to_string();
-        assert!(
-            msg.contains("2") && msg.contains("1"),
-            "エラーメッセージに件数が含まれること: {msg}"
-        );
+        let samples = parse_samples(html).unwrap();
+        assert!(samples.is_empty());
     }
 
     #[test]
